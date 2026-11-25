@@ -6,6 +6,9 @@ on:
     - cron: '30 0 * * *'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   run-brief:
     runs-on: ubuntu-latest
@@ -22,10 +25,25 @@ jobs:
       - name: 安装依赖
         run: pip install -r requirements.txt
 
-      - name: 运行早报脚本
+      - name: 抓取数据并生成网页早报
         env:
-          FEISHU_WEBHOOK: ${{ secrets.FEISHU_WEBHOOK }}
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
           LLM_BASE_URL: ${{ secrets.LLM_BASE_URL }}
           LLM_MODEL: ${{ secrets.LLM_MODEL }}
-        run: python daily_brief.py
+        run: python daily_brief.py --generate
+
+      - name: 提交并发布到 GitHub Pages
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/
+          git diff --staged --quiet || git commit -m "chore: update daily brief $(date -u +'%Y-%m-%d')"
+          git push
+
+      - name: 等待 GitHub Pages 刷新
+        run: sleep 25
+
+      - name: 发送飞书精简入口卡片
+        env:
+          FEISHU_WEBHOOK: ${{ secrets.FEISHU_WEBHOOK }}
+        run: python daily_brief.py --notify
