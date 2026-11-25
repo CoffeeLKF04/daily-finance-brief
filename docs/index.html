@@ -3,15 +3,18 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>全球财经与热点早报 · 2026-11-25</title>
+  <title>DAILY BRIEF · 全球财经与热点早报 · 2026-11-25</title>
   <style>
     :root {
-      --bg: #0a0e17;
-      --bg-elevated: #111827;
-      --bg-card: #131c2e;
+      --bg: #070b14;
+      --bg-glow-1: rgba(56, 189, 248, 0.11);
+      --bg-glow-2: rgba(99, 102, 241, 0.09);
+      --bg-elevated: #0f172a;
+      --bg-card: rgba(17, 25, 42, 0.86);
+      --bg-card-hover: rgba(23, 34, 56, 0.96);
       --bg-subtle: rgba(255, 255, 255, 0.035);
-      --border: rgba(148, 163, 184, 0.14);
-      --border-strong: rgba(148, 163, 184, 0.25);
+      --border: rgba(148, 163, 184, 0.13);
+      --border-strong: rgba(148, 163, 184, 0.28);
       --text: #f1f5f9;
       --text-secondary: #94a3b8;
       --text-muted: #64748b;
@@ -19,20 +22,28 @@
       --accent-soft: rgba(56, 189, 248, 0.12);
       --green: #10b981;
       --green-bg: rgba(16, 185, 129, 0.14);
-      --red: #ef4444;
-      --red-bg: rgba(239, 68, 68, 0.14);
+      --red: #f43f5e;
+      --red-bg: rgba(244, 63, 94, 0.14);
       --amber: #f59e0b;
       --amber-bg: rgba(245, 158, 11, 0.14);
-      --shadow: 0 10px 30px -12px rgba(0, 0, 0, 0.55);
+      --breaking-border: rgba(245, 158, 11, 0.45);
+      --breaking-glow: 0 12px 34px -14px rgba(245, 158, 11, 0.24);
+      --shadow: 0 12px 30px -14px rgba(0, 0, 0, 0.65);
+      --font-sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI", sans-serif;
+      --font-serif: "Songti SC", "STSong", "Noto Serif CJK SC", "Source Han Serif SC", Georgia, serif;
+      --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
     }
 
     [data-theme="light"] {
-      --bg: #f5f7fb;
+      --bg: #f4f6f9;
+      --bg-glow-1: rgba(2, 132, 199, 0.07);
+      --bg-glow-2: rgba(99, 102, 241, 0.05);
       --bg-elevated: #ffffff;
       --bg-card: #ffffff;
+      --bg-card-hover: #ffffff;
       --bg-subtle: #f8fafc;
-      --border: rgba(15, 23, 42, 0.09);
-      --border-strong: rgba(15, 23, 42, 0.16);
+      --border: rgba(15, 23, 42, 0.08);
+      --border-strong: rgba(15, 23, 42, 0.18);
       --text: #0f172a;
       --text-secondary: #475569;
       --text-muted: #64748b;
@@ -40,38 +51,91 @@
       --accent-soft: rgba(2, 132, 199, 0.1);
       --green: #059669;
       --green-bg: rgba(5, 150, 105, 0.1);
-      --red: #dc2626;
-      --red-bg: rgba(220, 38, 38, 0.1);
+      --red: #e11d48;
+      --red-bg: rgba(225, 29, 72, 0.1);
       --amber: #d97706;
-      --amber-bg: rgba(217, 119, 6, 0.1);
-      --shadow: 0 8px 24px -10px rgba(15, 23, 42, 0.08);
+      --amber-bg: rgba(217, 119, 6, 0.12);
+      --breaking-border: rgba(217, 119, 6, 0.48);
+      --breaking-glow: 0 10px 26px -12px rgba(217, 119, 6, 0.18);
+      --shadow: 0 6px 22px -10px rgba(15, 23, 42, 0.08);
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html { scroll-behavior: smooth; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI", sans-serif;
-      background: var(--bg);
+      font-family: var(--font-sans);
+      background-color: var(--bg);
+      background-image:
+        radial-gradient(900px 420px at 15% -6%, var(--bg-glow-1), transparent 60%),
+        radial-gradient(760px 380px at 88% 2%, var(--bg-glow-2), transparent 55%);
+      background-attachment: fixed;
       color: var(--text);
       line-height: 1.65;
       -webkit-font-smoothing: antialiased;
-      padding-bottom: 64px;
+      padding-bottom: 80px;
     }
+
+    /* 阅读进度条 */
+    .read-progress {
+      position: fixed;
+      top: 0;
+      left: 0;
+      height: 2.5px;
+      width: 0%;
+      background: linear-gradient(90deg, var(--accent), #818cf8, var(--amber));
+      z-index: 100;
+      transition: width 0.08s linear;
+    }
+
+    /* 顶部滚动行情带 */
+    .ticker-tape {
+      background: var(--bg-elevated);
+      border-bottom: 1px solid var(--border);
+      overflow: hidden;
+      white-space: nowrap;
+      height: 34px;
+      display: flex;
+      align-items: center;
+      font-family: var(--font-mono);
+      font-size: 12px;
+    }
+    .ticker-track {
+      display: inline-flex;
+      align-items: center;
+      animation: marquee 42s linear infinite;
+    }
+    .ticker-tape:hover .ticker-track { animation-play-state: paused; }
+    @keyframes marquee {
+      0% { transform: translateX(0); }
+      100% { transform: translateX(-50%); }
+    }
+    .tape-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 0 18px;
+      border-right: 1px solid var(--border);
+    }
+    .tape-name { color: var(--text-secondary); font-family: var(--font-sans); font-weight: 600; }
+    .tape-price { color: var(--text); font-weight: 600; }
+    .tape-green { color: var(--green); font-weight: 700; }
+    .tape-red { color: var(--red); font-weight: 700; }
+    .tape-flat { color: var(--text-muted); }
 
     .container {
-      max-width: 980px;
+      max-width: 1040px;
       margin: 0 auto;
-      padding: 0 20px;
+      padding: 0 22px;
     }
 
-    /* 顶部栏 */
+    /* 粘性导航栏 */
     .topbar {
       position: sticky;
       top: 0;
-      z-index: 50;
-      backdrop-filter: blur(14px);
-      -webkit-backdrop-filter: blur(14px);
-      background: color-mix(in srgb, var(--bg) 82%, transparent);
+      z-index: 60;
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      background: color-mix(in srgb, var(--bg) 80%, transparent);
       border-bottom: 1px solid var(--border);
     }
     .topbar-inner {
@@ -85,18 +149,32 @@
       display: flex;
       align-items: center;
       gap: 10px;
-      font-weight: 700;
-      font-size: 15px;
-      letter-spacing: 0.2px;
-      color: var(--text);
       text-decoration: none;
+      color: var(--text);
     }
-    .brand-dot {
-      width: 9px;
-      height: 9px;
-      border-radius: 50%;
-      background: var(--accent);
-      box-shadow: 0 0 12px var(--accent);
+    .brand-mark {
+      width: 26px;
+      height: 26px;
+      border-radius: 7px;
+      background: linear-gradient(135deg, var(--accent), #6366f1);
+      display: grid;
+      place-items: center;
+      font-family: var(--font-mono);
+      font-weight: 800;
+      font-size: 13px;
+      color: #fff;
+      box-shadow: 0 4px 12px rgba(56, 189, 248, 0.3);
+    }
+    .brand-title {
+      font-weight: 800;
+      font-size: 15px;
+      letter-spacing: 0.6px;
+    }
+    .brand-sub {
+      font-size: 12px;
+      color: var(--text-muted);
+      padding-left: 8px;
+      border-left: 1px solid var(--border);
     }
     .controls {
       display: flex;
@@ -107,53 +185,71 @@
       background: var(--bg-elevated);
       color: var(--text);
       border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 6px 10px;
-      font-size: 13px;
+      border-radius: 9px;
+      padding: 6px 11px;
+      font-size: 12.5px;
+      font-weight: 500;
       cursor: pointer;
-      transition: border-color 0.2s, background 0.2s;
+      transition: all 0.18s;
     }
     .archive-select:hover, .theme-btn:hover {
       border-color: var(--border-strong);
+      background: var(--bg-card-hover);
     }
 
-    /* 报头 Hero */
+    /* 报头 Masthead */
     .hero {
-      padding: 32px 0 22px;
+      padding: 36px 0 24px;
       border-bottom: 1px solid var(--border);
       margin-bottom: 24px;
     }
-    .hero-meta {
+    .hero-top {
       display: flex;
       flex-wrap: wrap;
       align-items: center;
+      justify-content: space-between;
       gap: 10px;
-      margin-bottom: 10px;
+      margin-bottom: 14px;
+    }
+    .hero-date {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
       font-size: 13px;
       color: var(--text-secondary);
+      font-family: var(--font-mono);
+    }
+    .live-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.18);
     }
     .mood-pill {
       display: inline-flex;
       align-items: center;
-      gap: 5px;
-      padding: 3px 10px;
+      gap: 6px;
+      padding: 4px 12px;
       border-radius: 999px;
       font-size: 12px;
-      font-weight: 600;
+      font-weight: 700;
+      letter-spacing: 0.2px;
     }
-    .mood-bullish { background: var(--red-bg); color: var(--red); }
-    .mood-bearish { background: var(--green-bg); color: var(--green); }
-    .mood-neutral { background: var(--accent-soft); color: var(--accent); }
+    .mood-bullish { background: var(--red-bg); color: var(--red); border: 1px solid rgba(244, 63, 94, 0.25); }
+    .mood-bearish { background: var(--green-bg); color: var(--green); border: 1px solid rgba(16, 185, 129, 0.25); }
+    .mood-neutral { background: var(--accent-soft); color: var(--accent); border: 1px solid rgba(56, 189, 248, 0.25); }
 
     .hero h1 {
-      font-size: clamp(22px, 4vw, 30px);
+      font-family: var(--font-serif);
+      font-size: clamp(25px, 4.2vw, 36px);
       font-weight: 800;
-      letter-spacing: -0.4px;
-      line-height: 1.3;
-      margin-bottom: 14px;
+      letter-spacing: -0.3px;
+      line-height: 1.32;
+      margin-bottom: 18px;
+      color: var(--text);
     }
 
-    /* 快捷导航 */
     .quick-nav {
       display: flex;
       flex-wrap: wrap;
@@ -162,166 +258,369 @@
     .quick-nav a {
       text-decoration: none;
       font-size: 13px;
+      font-weight: 500;
       color: var(--text-secondary);
-      background: var(--bg-elevated);
+      background: var(--bg-card);
       border: 1px solid var(--border);
-      padding: 5px 12px;
+      padding: 6px 14px;
       border-radius: 999px;
       transition: all 0.18s;
     }
     .quick-nav a:hover {
       color: var(--accent);
       border-color: var(--accent);
+      transform: translateY(-1px);
     }
 
-    /* 2x2 行情看板 */
+    /* 2x2 终端行情看板（含 SVG Sparkline） */
     .market-grid {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 14px;
+      gap: 16px;
       margin-bottom: 24px;
+      scroll-margin-top: 76px;
     }
     .market-card {
       background: var(--bg-card);
       border: 1px solid var(--border);
-      border-radius: 14px;
-      padding: 16px 18px;
+      border-radius: 16px;
+      padding: 16px 20px;
       box-shadow: var(--shadow);
+      backdrop-filter: blur(8px);
     }
     .market-card-title {
       font-size: 13px;
       font-weight: 700;
       color: var(--text-secondary);
-      text-transform: uppercase;
-      letter-spacing: 0.6px;
+      letter-spacing: 0.4px;
       margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
       display: flex;
       align-items: center;
       justify-content: space-between;
+    }
+    .market-card-sub {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text-muted);
+      background: var(--bg-subtle);
+      padding: 2px 7px;
+      border-radius: 5px;
     }
     .market-row {
-      display: flex;
+      display: grid;
+      grid-template-columns: 1fr auto auto;
       align-items: center;
-      justify-content: space-between;
-      padding: 7px 0;
+      gap: 12px;
+      padding: 8px 0;
       border-bottom: 1px dashed var(--border);
-      gap: 10px;
     }
     .market-row:last-child { border-bottom: none; padding-bottom: 0; }
+    .ticker-left {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
     .ticker-name {
       font-size: 14px;
       font-weight: 600;
       color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
+    .ticker-sym {
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      color: var(--text-muted);
+    }
+    .ticker-mid {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .sparkline { display: block; overflow: visible; }
     .ticker-right {
       display: flex;
       align-items: center;
-      gap: 10px;
-      font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+      justify-content: flex-end;
+      gap: 9px;
+      font-family: var(--font-mono);
       font-variant-numeric: tabular-nums;
     }
     .ticker-price {
       font-size: 14px;
-      font-weight: 600;
+      font-weight: 700;
       color: var(--text);
     }
     .pct-badge {
       min-width: 72px;
       text-align: right;
-      font-size: 12.5px;
+      font-size: 12px;
       font-weight: 700;
-      padding: 2px 8px;
-      border-radius: 6px;
+      padding: 3px 8px;
+      border-radius: 7px;
     }
     .pct-green { color: var(--green); background: var(--green-bg); }
     .pct-red { color: var(--red); background: var(--red-bg); }
     .pct-flat { color: var(--text-secondary); background: var(--bg-subtle); }
 
-    /* 今日全景总览 */
+    /* 主编总览 + 重磅速达 */
     .overview-box {
-      background: linear-gradient(135deg, var(--bg-card) 0%, var(--bg-elevated) 100%);
+      background: linear-gradient(145deg, var(--bg-card) 0%, var(--bg-elevated) 100%);
       border: 1px solid var(--border);
-      border-left: 4px solid var(--accent);
-      border-radius: 14px;
-      padding: 20px 22px;
-      margin-bottom: 30px;
+      border-radius: 18px;
+      padding: 22px 24px;
+      margin-bottom: 26px;
       box-shadow: var(--shadow);
+      position: relative;
+      overflow: hidden;
+    }
+    .overview-box::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 4px;
+      background: linear-gradient(180deg, var(--accent), #818cf8);
     }
     .overview-label {
       font-size: 13px;
-      font-weight: 700;
+      font-weight: 800;
       color: var(--accent);
-      margin-bottom: 8px;
-      letter-spacing: 0.4px;
+      letter-spacing: 0.6px;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
     }
     .overview-text {
-      font-size: 15px;
+      font-size: 15.5px;
       color: var(--text);
-      line-height: 1.8;
+      line-height: 1.85;
+    }
+
+    .spotlight-wrap {
+      margin-top: 18px;
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
+    }
+    .spotlight-header {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--amber);
+      letter-spacing: 0.4px;
+      margin-bottom: 10px;
+    }
+    .spotlight-list {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .spotlight-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 11px;
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      text-decoration: none;
+      color: var(--text);
+      font-size: 13px;
+      transition: all 0.16s;
+      min-width: 0;
+    }
+    .spotlight-item:hover {
+      border-color: var(--amber);
+      background: var(--amber-bg);
+      transform: translateX(2px);
+    }
+    .spotlight-badge {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--amber);
+      white-space: nowrap;
+    }
+    .spotlight-sec {
+      font-size: 11px;
+      color: var(--text-muted);
+      white-space: nowrap;
+    }
+    .spotlight-title {
+      flex: 1;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .spotlight-arrow {
+      color: var(--text-muted);
+      font-size: 12px;
+    }
+
+    /* 交互式筛选与搜索工具栏 */
+    .filter-bar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 24px;
+      padding: 12px 14px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      box-shadow: var(--shadow);
+    }
+    .filter-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .filter-btn {
+      background: var(--bg-subtle);
+      color: var(--text-secondary);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 5px 13px;
+      font-size: 12.5px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.16s;
+    }
+    .filter-btn:hover { color: var(--text); border-color: var(--border-strong); }
+    .filter-btn.active {
+      background: var(--accent);
+      color: #ffffff;
+      border-color: var(--accent);
+      box-shadow: 0 4px 12px rgba(56, 189, 248, 0.25);
+    }
+    .search-box {
+      position: relative;
+      flex: 0 1 240px;
+      min-width: 180px;
+    }
+    .search-input {
+      width: 100%;
+      background: var(--bg-elevated);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 6px 14px 6px 32px;
+      font-size: 12.5px;
+      outline: none;
+      transition: border-color 0.18s;
+    }
+    .search-input:focus { border-color: var(--accent); }
+    .search-icon {
+      position: absolute;
+      left: 11px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 12px;
+      color: var(--text-muted);
+      pointer-events: none;
     }
 
     /* 新闻分区 */
     .section {
-      margin-bottom: 34px;
-      scroll-margin-top: 74px;
+      margin-bottom: 38px;
+      scroll-margin-top: 76px;
     }
     .section-header {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      margin-bottom: 14px;
+      margin-bottom: 16px;
       padding-bottom: 10px;
       border-bottom: 1px solid var(--border);
     }
     .section-title {
-      font-size: 18px;
+      font-family: var(--font-serif);
+      font-size: 20px;
       font-weight: 800;
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 9px;
+      letter-spacing: 0.2px;
     }
     .section-count {
+      font-family: var(--font-mono);
       font-size: 12px;
       color: var(--text-muted);
       background: var(--bg-elevated);
       border: 1px solid var(--border);
-      padding: 2px 9px;
+      padding: 3px 10px;
       border-radius: 999px;
     }
 
     .news-list {
       display: grid;
-      gap: 14px;
+      gap: 15px;
     }
     .news-card {
       background: var(--bg-card);
       border: 1px solid var(--border);
-      border-radius: 14px;
-      padding: 18px 20px;
-      transition: transform 0.18s ease, border-color 0.18s ease;
+      border-radius: 16px;
+      padding: 20px 22px;
+      transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
       box-shadow: var(--shadow);
+      scroll-margin-top: 84px;
     }
     .news-card:hover {
       transform: translateY(-2px);
       border-color: var(--border-strong);
+      background: var(--bg-card-hover);
     }
+    /* 5★ 重磅头条专属高亮 */
+    .news-card.is-breaking {
+      border-color: var(--breaking-border);
+      box-shadow: var(--breaking-glow);
+      background: linear-gradient(180deg, color-mix(in srgb, var(--amber) 5%, var(--bg-card)) 0%, var(--bg-card) 45%);
+    }
+    .news-card.is-hidden { display: none; }
+
     .news-top {
       display: flex;
       flex-wrap: wrap;
       align-items: center;
       gap: 8px;
-      margin-bottom: 8px;
+      margin-bottom: 10px;
     }
     .news-idx {
-      font-family: ui-monospace, monospace;
+      font-family: var(--font-mono);
       font-size: 12px;
       font-weight: 700;
       color: var(--text-muted);
     }
+    .breaking-pill {
+      font-size: 11.5px;
+      font-weight: 800;
+      padding: 2px 9px;
+      border-radius: 6px;
+      background: var(--amber-bg);
+      color: var(--amber);
+      border: 1px solid rgba(245, 158, 11, 0.32);
+    }
+    .score-pill {
+      font-size: 11.5px;
+      letter-spacing: 1px;
+      padding: 2px 7px;
+      border-radius: 6px;
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+    }
+    .stars-on { color: var(--amber); }
+    .stars-off { color: var(--text-muted); opacity: 0.45; }
+
     .tag-pill {
       font-size: 11.5px;
       font-weight: 600;
-      padding: 2px 8px;
+      padding: 2px 9px;
       border-radius: 6px;
       background: var(--accent-soft);
       color: var(--accent);
@@ -329,7 +628,7 @@
     .sent-pill {
       font-size: 11.5px;
       font-weight: 700;
-      padding: 2px 8px;
+      padding: 2px 9px;
       border-radius: 6px;
     }
     .sent-bull { background: var(--red-bg); color: var(--red); }
@@ -337,73 +636,130 @@
     .sent-neu { background: var(--bg-subtle); color: var(--text-secondary); }
 
     .news-title {
-      font-size: 16.5px;
+      font-size: 17.5px;
       font-weight: 700;
       line-height: 1.45;
-      margin-bottom: 8px;
+      margin-bottom: 9px;
       color: var(--text);
     }
     .news-fact {
-      font-size: 14.5px;
+      font-size: 14.8px;
       color: var(--text-secondary);
-      line-height: 1.75;
-      margin-bottom: 10px;
-    }
-    .news-impact {
-      background: var(--bg-subtle);
-      border-left: 3px solid var(--amber);
-      border-radius: 0 8px 8px 0;
-      padding: 8px 12px;
-      font-size: 13.5px;
-      color: var(--text);
+      line-height: 1.8;
       margin-bottom: 12px;
     }
-    .news-impact span {
-      font-weight: 700;
-      color: var(--amber);
-      margin-right: 4px;
+    .news-impact {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      background: var(--bg-subtle);
+      border-left: 3px solid var(--accent);
+      border-radius: 0 10px 10px 0;
+      padding: 9px 13px;
+      font-size: 13.5px;
+      color: var(--text);
+      margin-bottom: 13px;
+      line-height: 1.65;
+    }
+    .impact-label {
+      font-size: 11.5px;
+      font-weight: 800;
+      color: var(--accent);
+      background: var(--accent-soft);
+      padding: 1px 7px;
+      border-radius: 5px;
+      white-space: nowrap;
     }
     .news-footer {
       display: flex;
       align-items: center;
       justify-content: space-between;
+      gap: 10px;
       font-size: 12.5px;
       color: var(--text-muted);
-      padding-top: 8px;
+      padding-top: 10px;
       border-top: 1px solid var(--border);
     }
+    .source-meta { font-family: var(--font-mono); font-size: 12px; }
     .source-link {
       color: var(--accent);
       text-decoration: none;
       font-weight: 600;
+      padding: 3px 10px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      transition: all 0.16s;
     }
-    .source-link:hover { text-decoration: underline; }
+    .source-link:hover {
+      background: var(--accent);
+      color: #fff;
+    }
+    .source-nolink { font-size: 11.5px; opacity: 0.65; }
+
+    .empty-hint {
+      display: none;
+      text-align: center;
+      padding: 28px 16px;
+      color: var(--text-muted);
+      font-size: 13.5px;
+      border: 1px dashed var(--border);
+      border-radius: 14px;
+    }
+    .empty-hint.show { display: block; }
+
+    /* 返回顶部 */
+    .back-top {
+      position: fixed;
+      right: 22px;
+      bottom: 24px;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      border: 1px solid var(--border-strong);
+      background: var(--bg-elevated);
+      color: var(--text);
+      font-size: 16px;
+      cursor: pointer;
+      box-shadow: var(--shadow);
+      opacity: 0;
+      pointer-events: none;
+      transition: all 0.2s;
+      z-index: 70;
+    }
+    .back-top.visible { opacity: 1; pointer-events: auto; }
+    .back-top:hover { border-color: var(--accent); color: var(--accent); transform: translateY(-2px); }
 
     footer {
       text-align: center;
       font-size: 12.5px;
       color: var(--text-muted);
-      padding-top: 24px;
+      padding-top: 28px;
       border-top: 1px solid var(--border);
-      line-height: 1.8;
+      line-height: 1.9;
     }
 
-    @media (max-width: 720px) {
+    @media (max-width: 760px) {
       .market-grid { grid-template-columns: 1fr; }
-      .hero { padding: 22px 0 18px; }
-      .news-card { padding: 15px 16px; }
-      .topbar-inner { height: 54px; }
-      .brand span.brand-sub { display: none; }
+      .spotlight-list { grid-template-columns: 1fr; }
+      .hero { padding: 24px 0 18px; }
+      .news-card { padding: 16px; }
+      .overview-box { padding: 18px; }
+      .brand-sub { display: none; }
+      .search-box { flex: 1 1 100%; }
+      .ticker-mid { display: none; }
     }
   </style>
 </head>
 <body>
+  <div class="read-progress" id="readProgress"></div>
+  <div class="ticker-tape"><div class="ticker-track"><span class="tape-item">  <span class="tape-name">纳斯达克</span>  <span class="tape-price">23,733.54</span>  <span class="tape-pct tape-red">-1.48%</span></span><span class="tape-item">  <span class="tape-name">标普500</span>  <span class="tape-price">7,201.09</span>  <span class="tape-pct tape-red">-0.50%</span></span><span class="tape-item">  <span class="tape-name">道琼斯</span>  <span class="tape-price">50,018.70</span>  <span class="tape-pct tape-green">+0.85%</span></span><span class="tape-item">  <span class="tape-name">费城半导体</span>  <span class="tape-price">8,832.50</span>  <span class="tape-pct tape-red">-7.88%</span></span><span class="tape-item">  <span class="tape-name">英伟达</span>  <span class="tape-price">155.38</span>  <span class="tape-pct tape-red">-5.86%</span></span><span class="tape-item">  <span class="tape-name">苹果</span>  <span class="tape-price">354.07</span>  <span class="tape-pct tape-green">+1.43%</span></span><span class="tape-item">  <span class="tape-name">微软</span>  <span class="tape-price">496.13</span>  <span class="tape-pct tape-green">+0.74%</span></span><span class="tape-item">  <span class="tape-name">特斯拉</span>  <span class="tape-price">384.68</span>  <span class="tape-pct tape-red">-0.20%</span></span><span class="tape-item">  <span class="tape-name">上证指数</span>  <span class="tape-price">3,516.99</span>  <span class="tape-pct tape-green">-0.88%</span></span><span class="tape-item">  <span class="tape-name">深证成指</span>  <span class="tape-price">10,348.21</span>  <span class="tape-pct tape-green">-0.72%</span></span><span class="tape-item">  <span class="tape-name">创业板指</span>  <span class="tape-price">2,252.16</span>  <span class="tape-pct tape-green">-1.27%</span></span><span class="tape-item">  <span class="tape-name">沪深300</span>  <span class="tape-price">3,929.10</span>  <span class="tape-pct tape-green">-0.89%</span></span><span class="tape-item">  <span class="tape-name">黄金</span>  <span class="tape-price">3,562.00</span>  <span class="tape-pct tape-red">-2.45%</span></span><span class="tape-item">  <span class="tape-name">WTI原油</span>  <span class="tape-price">80.91</span>  <span class="tape-pct tape-green">+0.92%</span></span><span class="tape-item">  <span class="tape-name">BTC</span>  <span class="tape-price">59,217.84</span>  <span class="tape-pct tape-red">-3.26%</span></span><span class="tape-item">  <span class="tape-name">离岸RMB</span>  <span class="tape-price">6.66</span>  <span class="tape-pct tape-red">-0.08%</span></span><span class="tape-item">  <span class="tape-name">纳斯达克</span>  <span class="tape-price">23,733.54</span>  <span class="tape-pct tape-red">-1.48%</span></span><span class="tape-item">  <span class="tape-name">标普500</span>  <span class="tape-price">7,201.09</span>  <span class="tape-pct tape-red">-0.50%</span></span><span class="tape-item">  <span class="tape-name">道琼斯</span>  <span class="tape-price">50,018.70</span>  <span class="tape-pct tape-green">+0.85%</span></span><span class="tape-item">  <span class="tape-name">费城半导体</span>  <span class="tape-price">8,832.50</span>  <span class="tape-pct tape-red">-7.88%</span></span><span class="tape-item">  <span class="tape-name">英伟达</span>  <span class="tape-price">155.38</span>  <span class="tape-pct tape-red">-5.86%</span></span><span class="tape-item">  <span class="tape-name">苹果</span>  <span class="tape-price">354.07</span>  <span class="tape-pct tape-green">+1.43%</span></span><span class="tape-item">  <span class="tape-name">微软</span>  <span class="tape-price">496.13</span>  <span class="tape-pct tape-green">+0.74%</span></span><span class="tape-item">  <span class="tape-name">特斯拉</span>  <span class="tape-price">384.68</span>  <span class="tape-pct tape-red">-0.20%</span></span><span class="tape-item">  <span class="tape-name">上证指数</span>  <span class="tape-price">3,516.99</span>  <span class="tape-pct tape-green">-0.88%</span></span><span class="tape-item">  <span class="tape-name">深证成指</span>  <span class="tape-price">10,348.21</span>  <span class="tape-pct tape-green">-0.72%</span></span><span class="tape-item">  <span class="tape-name">创业板指</span>  <span class="tape-price">2,252.16</span>  <span class="tape-pct tape-green">-1.27%</span></span><span class="tape-item">  <span class="tape-name">沪深300</span>  <span class="tape-price">3,929.10</span>  <span class="tape-pct tape-green">-0.89%</span></span><span class="tape-item">  <span class="tape-name">黄金</span>  <span class="tape-price">3,562.00</span>  <span class="tape-pct tape-red">-2.45%</span></span><span class="tape-item">  <span class="tape-name">WTI原油</span>  <span class="tape-price">80.91</span>  <span class="tape-pct tape-green">+0.92%</span></span><span class="tape-item">  <span class="tape-name">BTC</span>  <span class="tape-price">59,217.84</span>  <span class="tape-pct tape-red">-3.26%</span></span><span class="tape-item">  <span class="tape-name">离岸RMB</span>  <span class="tape-price">6.66</span>  <span class="tape-pct tape-red">-0.08%</span></span></div></div>
+
   <header class="topbar">
     <div class="container topbar-inner">
       <a class="brand" href="index.html">
-        <span class="brand-dot"></span>
-        <span>DAILY BRIEF</span>
-        <span class="brand-sub" style="font-weight:400;color:var(--text-muted);font-size:12px;">· 全球财经与热点早报</span>
+        <span class="brand-mark">DB</span>
+        <span class="brand-title">DAILY BRIEF</span>
+        <span class="brand-sub">全球财经与热点终端</span>
       </a>
       <div class="controls">
         <select class="archive-select" aria-label="往期早报" onchange="if(this.value) window.location.href=this.value"><option value="archive/2026-11-25.html" selected>2026-11-25 (最新)</option></select>
@@ -414,13 +770,14 @@
 
   <main class="container">
     <section class="hero">
-      <div class="hero-meta">
-        <span>📅 2026年11月25日 周三</span>
-        <span>·</span>
-        <span>🕒 生成于 10:34 (北京时间)</span>
+      <div class="hero-top">
+        <span class="hero-date">
+          <span class="live-dot"></span>
+          <span>2026年11月25日 周三 · 10:48 CST</span>
+        </span>
         <span class="mood-pill mood-bearish">❄️ 市场情绪偏谨慎</span>
       </div>
-      <h1>AI交易退潮叠加利率上行预期</h1>
+      <h1>AI热潮降温与通胀压力共振</h1>
       <nav class="quick-nav">
         <a href="#markets">📊 跨市场行情</a>
         <a href="#us-global">🇺🇸 美股与全球财经</a>
@@ -430,80 +787,160 @@
     </section>
 
     <section id="markets" class="market-grid">
-      <div class="market-card">  <div class="market-card-title"><span>🇺🇸 隔夜美股指数</span><span style="font-weight:400;font-size:11px;color:var(--text-muted)">绿涨红跌</span></div>  <div class="market-row">  <span class="ticker-name">纳斯达克</span>  <span class="ticker-right">    <span class="ticker-price">23,733.54</span>    <span class="pct-badge pct-red">-1.48%</span>  </span></div><div class="market-row">  <span class="ticker-name">标普500</span>  <span class="ticker-right">    <span class="ticker-price">7,201.09</span>    <span class="pct-badge pct-red">-0.50%</span>  </span></div><div class="market-row">  <span class="ticker-name">道琼斯</span>  <span class="ticker-right">    <span class="ticker-price">50,018.70</span>    <span class="pct-badge pct-green">+0.85%</span>  </span></div><div class="market-row">  <span class="ticker-name">费城半导体</span>  <span class="ticker-right">    <span class="ticker-price">8,832.50</span>    <span class="pct-badge pct-red">-7.88%</span>  </span></div></div>
-<div class="market-card">  <div class="market-card-title"><span>🚀 美股科技风向</span><span style="font-weight:400;font-size:11px;color:var(--text-muted)">绿涨红跌</span></div>  <div class="market-row">  <span class="ticker-name">英伟达</span>  <span class="ticker-right">    <span class="ticker-price">155.38</span>    <span class="pct-badge pct-red">-5.86%</span>  </span></div><div class="market-row">  <span class="ticker-name">苹果</span>  <span class="ticker-right">    <span class="ticker-price">354.07</span>    <span class="pct-badge pct-green">+1.43%</span>  </span></div><div class="market-row">  <span class="ticker-name">微软</span>  <span class="ticker-right">    <span class="ticker-price">496.13</span>    <span class="pct-badge pct-green">+0.74%</span>  </span></div><div class="market-row">  <span class="ticker-name">特斯拉</span>  <span class="ticker-right">    <span class="ticker-price">384.68</span>    <span class="pct-badge pct-red">-0.20%</span>  </span></div></div>
-<div class="market-card">  <div class="market-card-title"><span>🇨🇳 A 股核心收盘</span><span style="font-weight:400;font-size:11px;color:var(--text-muted)">红涨绿跌</span></div>  <div class="market-row">  <span class="ticker-name">上证指数</span>  <span class="ticker-right">    <span class="ticker-price">3,513.27</span>    <span class="pct-badge pct-green">-0.99%</span>  </span></div><div class="market-row">  <span class="ticker-name">深证成指</span>  <span class="ticker-right">    <span class="ticker-price">10,357.44</span>    <span class="pct-badge pct-green">-0.63%</span>  </span></div><div class="market-row">  <span class="ticker-name">创业板指</span>  <span class="ticker-right">    <span class="ticker-price">2,261.43</span>    <span class="pct-badge pct-green">-0.86%</span>  </span></div><div class="market-row">  <span class="ticker-name">沪深300</span>  <span class="ticker-right">    <span class="ticker-price">3,926.55</span>    <span class="pct-badge pct-green">-0.95%</span>  </span></div></div>
-<div class="market-card">  <div class="market-card-title"><span>🌍 大宗 · 加密 · 汇率</span><span style="font-weight:400;font-size:11px;color:var(--text-muted)">绿涨红跌</span></div>  <div class="market-row">  <span class="ticker-name">黄金</span>  <span class="ticker-right">    <span class="ticker-price">3,563.30</span>    <span class="pct-badge pct-red">-2.41%</span>  </span></div><div class="market-row">  <span class="ticker-name">WTI原油</span>  <span class="ticker-right">    <span class="ticker-price">80.86</span>    <span class="pct-badge pct-green">+0.86%</span>  </span></div><div class="market-row">  <span class="ticker-name">BTC</span>  <span class="ticker-right">    <span class="ticker-price">59,163.98</span>    <span class="pct-badge pct-red">-3.34%</span>  </span></div><div class="market-row">  <span class="ticker-name">离岸RMB</span>  <span class="ticker-right">    <span class="ticker-price">6.66</span>    <span class="pct-badge pct-red">-0.08%</span>  </span></div></div>
+      <div class="market-card">  <div class="market-card-title"><span>🇺🇸 隔夜美股指数</span><span class="market-card-sub">绿涨红跌 · 7日趋势</span></div>  <div class="market-row">  <div class="ticker-left">    <span class="ticker-name">纳斯达克</span>    <span class="ticker-sym">^IXIC</span>  </div>  <div class="ticker-mid"><svg class="sparkline" width="68" height="22" viewBox="0 0 68 22" fill="none" aria-hidden="true">  <defs>    <linearGradient id="sg-us-0" x1="0" y1="0" x2="0" y2="1">      <stop offset="0%" stop-color="#f43f5e" stop-opacity="0.32"/>      <stop offset="100%" stop-color="#f43f5e" stop-opacity="0"/>    </linearGradient>  </defs>  <polygon points="0,22 0.0,2.5 11.3,4.1 22.7,3.2 34.0,8.2 45.3,19.5 56.7,6.3 68.0,9.5 68,22" fill="url(#sg-us-0)"/>  <polyline points="0.0,2.5 11.3,4.1 22.7,3.2 34.0,8.2 45.3,19.5 56.7,6.3 68.0,9.5" stroke="#f43f5e" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>  <circle cx="68.0" cy="9.5" r="2.2" fill="#f43f5e"/></svg></div>  <div class="ticker-right">    <span class="ticker-price">23,733.54</span>    <span class="pct-badge pct-red">-1.48%</span>  </div></div><div class="market-row">  <div class="ticker-left">    <span class="ticker-name">标普500</span>    <span class="ticker-sym">^GSPC</span>  </div>  <div class="ticker-mid"><svg class="sparkline" width="68" height="22" viewBox="0 0 68 22" fill="none" aria-hidden="true">  <defs>    <linearGradient id="sg-us-1" x1="0" y1="0" x2="0" y2="1">      <stop offset="0%" stop-color="#f43f5e" stop-opacity="0.32"/>      <stop offset="100%" stop-color="#f43f5e" stop-opacity="0"/>    </linearGradient>  </defs>  <polygon points="0,22 0.0,2.5 11.3,5.1 22.7,5.6 34.0,10.6 45.3,19.5 56.7,8.5 68.0,9.7 68,22" fill="url(#sg-us-1)"/>  <polyline points="0.0,2.5 11.3,5.1 22.7,5.6 34.0,10.6 45.3,19.5 56.7,8.5 68.0,9.7" stroke="#f43f5e" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>  <circle cx="68.0" cy="9.7" r="2.2" fill="#f43f5e"/></svg></div>  <div class="ticker-right">    <span class="ticker-price">7,201.09</span>    <span class="pct-badge pct-red">-0.50%</span>  </div></div><div class="market-row">  <div class="ticker-left">    <span class="ticker-name">道琼斯</span>    <span class="ticker-sym">^DJI</span>  </div>  <div class="ticker-mid"><svg class="sparkline" width="68" height="22" viewBox="0 0 68 22" fill="none" aria-hidden="true">  <defs>    <linearGradient id="sg-us-2" x1="0" y1="0" x2="0" y2="1">      <stop offset="0%" stop-color="#10b981" stop-opacity="0.32"/>      <stop offset="100%" stop-color="#10b981" stop-opacity="0"/>    </linearGradient>  </defs>  <polygon points="0,22 0.0,2.5 11.3,6.7 22.7,9.4 34.0,14.8 45.3,19.5 56.7,12.4 68.0,10.3 68,22" fill="url(#sg-us-2)"/>  <polyline points="0.0,2.5 11.3,6.7 22.7,9.4 34.0,14.8 45.3,19.5 56.7,12.4 68.0,10.3" stroke="#10b981" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>  <circle cx="68.0" cy="10.3" r="2.2" fill="#10b981"/></svg></div>  <div class="ticker-right">    <span class="ticker-price">50,018.70</span>    <span class="pct-badge pct-green">+0.85%</span>  </div></div><div class="market-row">  <div class="ticker-left">    <span class="ticker-name">费城半导体</span>    <span class="ticker-sym">^SOX</span>  </div>  <div class="ticker-mid"><svg class="sparkline" width="68" height="22" viewBox="0 0 68 22" fill="none" aria-hidden="true">  <defs>    <linearGradient id="sg-us-3" x1="0" y1="0" x2="0" y2="1">      <stop offset="0%" stop-color="#f43f5e" stop-opacity="0.32"/>      <stop offset="100%" stop-color="#f43f5e" stop-opacity="0"/>    </linearGradient>  </defs>  <polygon points="0,22 0.0,3.1 11.3,2.6 22.7,2.5 34.0,5.7 45.3,19.5 56.7,3.4 68.0,13.7 68,22" fill="url(#sg-us-3)"/>  <polyline points="0.0,3.1 11.3,2.6 22.7,2.5 34.0,5.7 45.3,19.5 56.7,3.4 68.0,13.7" stroke="#f43f5e" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>  <circle cx="68.0" cy="13.7" r="2.2" fill="#f43f5e"/></svg></div>  <div class="ticker-right">    <span class="ticker-price">8,832.50</span>    <span class="pct-badge pct-red">-7.88%</span>  </div></div></div>
+<div class="market-card">  <div class="market-card-title"><span>🚀 美股科技风向</span><span class="market-card-sub">绿涨红跌 · 7日趋势</span></div>  <div class="market-row">  <div class="ticker-left">    <span class="ticker-name">英伟达</span>    <span class="ticker-sym">NVDA</span>  </div>  <div class="ticker-mid"><svg class="sparkline" width="68" height="22" viewBox="0 0 68 22" fill="none" aria-hidden="true">  <defs>    <linearGradient id="sg-tk-0" x1="0" y1="0" x2="0" y2="1">      <stop offset="0%" stop-color="#f43f5e" stop-opacity="0.32"/>      <stop offset="100%" stop-color="#f43f5e" stop-opacity="0"/>    </linearGradient>  </defs>  <polygon points="0,22 0.0,6.3 11.3,6.6 22.7,8.6 34.0,10.7 45.3,19.5 56.7,2.5 68.0,6.7 68,22" fill="url(#sg-tk-0)"/>  <polyline points="0.0,6.3 11.3,6.6 22.7,8.6 34.0,10.7 45.3,19.5 56.7,2.5 68.0,6.7" stroke="#f43f5e" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>  <circle cx="68.0" cy="6.7" r="2.2" fill="#f43f5e"/></svg></div>  <div class="ticker-right">    <span class="ticker-price">155.38</span>    <span class="pct-badge pct-red">-5.86%</span>  </div></div><div class="market-row">  <div class="ticker-left">    <span class="ticker-name">苹果</span>    <span class="ticker-sym">AAPL</span>  </div>  <div class="ticker-mid"><svg class="sparkline" width="68" height="22" viewBox="0 0 68 22" fill="none" aria-hidden="true">  <defs>    <linearGradient id="sg-tk-1" x1="0" y1="0" x2="0" y2="1">      <stop offset="0%" stop-color="#10b981" stop-opacity="0.32"/>      <stop offset="100%" stop-color="#10b981" stop-opacity="0"/>    </linearGradient>  </defs>  <polygon points="0,22 0.0,4.4 11.3,5.7 22.7,4.9 34.0,9.7 45.3,19.5 56.7,9.9 68.0,2.5 68,22" fill="url(#sg-tk-1)"/>  <polyline points="0.0,4.4 11.3,5.7 22.7,4.9 34.0,9.7 45.3,19.5 56.7,9.9 68.0,2.5" stroke="#10b981" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>  <circle cx="68.0" cy="2.5" r="2.2" fill="#10b981"/></svg></div>  <div class="ticker-right">    <span class="ticker-price">354.07</span>    <span class="pct-badge pct-green">+1.43%</span>  </div></div><div class="market-row">  <div class="ticker-left">    <span class="ticker-name">微软</span>    <span class="ticker-sym">MSFT</span>  </div>  <div class="ticker-mid"><svg class="sparkline" width="68" height="22" viewBox="0 0 68 22" fill="none" aria-hidden="true">  <defs>    <linearGradient id="sg-tk-2" x1="0" y1="0" x2="0" y2="1">      <stop offset="0%" stop-color="#10b981" stop-opacity="0.32"/>      <stop offset="100%" stop-color="#10b981" stop-opacity="0"/>    </linearGradient>  </defs>  <polygon points="0,22 0.0,2.5 11.3,8.6 22.7,7.6 34.0,12.3 45.3,19.5 56.7,15.3 68.0,13.4 68,22" fill="url(#sg-tk-2)"/>  <polyline points="0.0,2.5 11.3,8.6 22.7,7.6 34.0,12.3 45.3,19.5 56.7,15.3 68.0,13.4" stroke="#10b981" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>  <circle cx="68.0" cy="13.4" r="2.2" fill="#10b981"/></svg></div>  <div class="ticker-right">    <span class="ticker-price">496.13</span>    <span class="pct-badge pct-green">+0.74%</span>  </div></div><div class="market-row">  <div class="ticker-left">    <span class="ticker-name">特斯拉</span>    <span class="ticker-sym">TSLA</span>  </div>  <div class="ticker-mid"><svg class="sparkline" width="68" height="22" viewBox="0 0 68 22" fill="none" aria-hidden="true">  <defs>    <linearGradient id="sg-tk-3" x1="0" y1="0" x2="0" y2="1">      <stop offset="0%" stop-color="#f43f5e" stop-opacity="0.32"/>      <stop offset="100%" stop-color="#f43f5e" stop-opacity="0"/>    </linearGradient>  </defs>  <polygon points="0,22 0.0,5.0 11.3,4.8 22.7,3.2 34.0,7.2 45.3,19.5 56.7,2.5 68.0,2.8 68,22" fill="url(#sg-tk-3)"/>  <polyline points="0.0,5.0 11.3,4.8 22.7,3.2 34.0,7.2 45.3,19.5 56.7,2.5 68.0,2.8" stroke="#f43f5e" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>  <circle cx="68.0" cy="2.8" r="2.2" fill="#f43f5e"/></svg></div>  <div class="ticker-right">    <span class="ticker-price">384.68</span>    <span class="pct-badge pct-red">-0.20%</span>  </div></div></div>
+<div class="market-card">  <div class="market-card-title"><span>🇨🇳 A 股核心收盘</span><span class="market-card-sub">红涨绿跌 · 7日趋势</span></div>  <div class="market-row">  <div class="ticker-left">    <span class="ticker-name">上证指数</span>    <span class="ticker-sym">000001.SS</span>  </div>  <div class="ticker-mid"><svg class="sparkline" width="68" height="22" viewBox="0 0 68 22" fill="none" aria-hidden="true">  <defs>    <linearGradient id="sg-cn-0" x1="0" y1="0" x2="0" y2="1">      <stop offset="0%" stop-color="#10b981" stop-opacity="0.32"/>      <stop offset="100%" stop-color="#10b981" stop-opacity="0"/>    </linearGradient>  </defs>  <polygon points="0,22 0.0,3.3 11.3,2.5 22.7,5.0 34.0,15.5 45.3,14.2 56.7,12.0 68.0,19.5 68,22" fill="url(#sg-cn-0)"/>  <polyline points="0.0,3.3 11.3,2.5 22.7,5.0 34.0,15.5 45.3,14.2 56.7,12.0 68.0,19.5" stroke="#10b981" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>  <circle cx="68.0" cy="19.5" r="2.2" fill="#10b981"/></svg></div>  <div class="ticker-right">    <span class="ticker-price">3,516.99</span>    <span class="pct-badge pct-green">-0.88%</span>  </div></div><div class="market-row">  <div class="ticker-left">    <span class="ticker-name">深证成指</span>    <span class="ticker-sym">399001.SZ</span>  </div>  <div class="ticker-mid"><svg class="sparkline" width="68" height="22" viewBox="0 0 68 22" fill="none" aria-hidden="true">  <defs>    <linearGradient id="sg-cn-1" x1="0" y1="0" x2="0" y2="1">      <stop offset="0%" stop-color="#10b981" stop-opacity="0.32"/>      <stop offset="100%" stop-color="#10b981" stop-opacity="0"/>    </linearGradient>  </defs>  <polygon points="0,22 0.0,3.4 11.3,2.5 22.7,5.7 34.0,19.5 45.3,11.1 56.7,12.4 68.0,15.6 68,22" fill="url(#sg-cn-1)"/>  <polyline points="0.0,3.4 11.3,2.5 22.7,5.7 34.0,19.5 45.3,11.1 56.7,12.4 68.0,15.6" stroke="#10b981" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>  <circle cx="68.0" cy="15.6" r="2.2" fill="#10b981"/></svg></div>  <div class="ticker-right">    <span class="ticker-price">10,348.21</span>    <span class="pct-badge pct-green">-0.72%</span>  </div></div><div class="market-row">  <div class="ticker-left">    <span class="ticker-name">创业板指</span>    <span class="ticker-sym">399006.SZ</span>  </div>  <div class="ticker-mid"></div>  <div class="ticker-right">    <span class="ticker-price">2,252.16</span>    <span class="pct-badge pct-green">-1.27%</span>  </div></div><div class="market-row">  <div class="ticker-left">    <span class="ticker-name">沪深300</span>    <span class="ticker-sym">000300.SS</span>  </div>  <div class="ticker-mid"></div>  <div class="ticker-right">    <span class="ticker-price">3,929.10</span>    <span class="pct-badge pct-green">-0.89%</span>  </div></div></div>
+<div class="market-card">  <div class="market-card-title"><span>🌍 大宗 · 加密 · 汇率</span><span class="market-card-sub">绿涨红跌 · 7日趋势</span></div>  <div class="market-row">  <div class="ticker-left">    <span class="ticker-name">黄金</span>    <span class="ticker-sym">GC=F</span>  </div>  <div class="ticker-mid"><svg class="sparkline" width="68" height="22" viewBox="0 0 68 22" fill="none" aria-hidden="true">  <defs>    <linearGradient id="sg-mc-0" x1="0" y1="0" x2="0" y2="1">      <stop offset="0%" stop-color="#f43f5e" stop-opacity="0.32"/>      <stop offset="100%" stop-color="#f43f5e" stop-opacity="0"/>    </linearGradient>  </defs>  <polygon points="0,22 0.0,3.0 11.3,2.5 22.7,8.5 34.0,11.2 45.3,19.5 56.7,12.9 68.0,17.2 68,22" fill="url(#sg-mc-0)"/>  <polyline points="0.0,3.0 11.3,2.5 22.7,8.5 34.0,11.2 45.3,19.5 56.7,12.9 68.0,17.2" stroke="#f43f5e" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>  <circle cx="68.0" cy="17.2" r="2.2" fill="#f43f5e"/></svg></div>  <div class="ticker-right">    <span class="ticker-price">3,562.00</span>    <span class="pct-badge pct-red">-2.45%</span>  </div></div><div class="market-row">  <div class="ticker-left">    <span class="ticker-name">WTI原油</span>    <span class="ticker-sym">CL=F</span>  </div>  <div class="ticker-mid"><svg class="sparkline" width="68" height="22" viewBox="0 0 68 22" fill="none" aria-hidden="true">  <defs>    <linearGradient id="sg-mc-1" x1="0" y1="0" x2="0" y2="1">      <stop offset="0%" stop-color="#10b981" stop-opacity="0.32"/>      <stop offset="100%" stop-color="#10b981" stop-opacity="0"/>    </linearGradient>  </defs>  <polygon points="0,22 0.0,3.3 11.3,2.5 22.7,10.5 34.0,10.7 45.3,8.4 56.7,19.5 68.0,17.3 68,22" fill="url(#sg-mc-1)"/>  <polyline points="0.0,3.3 11.3,2.5 22.7,10.5 34.0,10.7 45.3,8.4 56.7,19.5 68.0,17.3" stroke="#10b981" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>  <circle cx="68.0" cy="17.3" r="2.2" fill="#10b981"/></svg></div>  <div class="ticker-right">    <span class="ticker-price">80.91</span>    <span class="pct-badge pct-green">+0.92%</span>  </div></div><div class="market-row">  <div class="ticker-left">    <span class="ticker-name">BTC</span>    <span class="ticker-sym">BTC-USD</span>  </div>  <div class="ticker-mid"><svg class="sparkline" width="68" height="22" viewBox="0 0 68 22" fill="none" aria-hidden="true">  <defs>    <linearGradient id="sg-mc-2" x1="0" y1="0" x2="0" y2="1">      <stop offset="0%" stop-color="#f43f5e" stop-opacity="0.32"/>      <stop offset="100%" stop-color="#f43f5e" stop-opacity="0"/>    </linearGradient>  </defs>  <polygon points="0,22 0.0,2.5 11.3,6.9 22.7,19.5 34.0,14.2 45.3,9.9 56.7,9.7 68.0,17.8 68,22" fill="url(#sg-mc-2)"/>  <polyline points="0.0,2.5 11.3,6.9 22.7,19.5 34.0,14.2 45.3,9.9 56.7,9.7 68.0,17.8" stroke="#f43f5e" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>  <circle cx="68.0" cy="17.8" r="2.2" fill="#f43f5e"/></svg></div>  <div class="ticker-right">    <span class="ticker-price">59,217.84</span>    <span class="pct-badge pct-red">-3.26%</span>  </div></div><div class="market-row">  <div class="ticker-left">    <span class="ticker-name">离岸RMB</span>    <span class="ticker-sym">CNH=X</span>  </div>  <div class="ticker-mid"></div>  <div class="ticker-right">    <span class="ticker-price">6.66</span>    <span class="pct-badge pct-red">-0.08%</span>  </div></div></div>
     </section>
 
     <section class="overview-box">
       <div class="overview-label">🧭 今日主编全景总览</div>
-      <div class="overview-text">隔夜美股标普500与纳指收跌，英伟达前一交易日的反弹部分回吐，亚洲科技股随之走弱，软银跌14%；市场等待美国通胀数据，股指期货仍偏软。关税计划推升通胀与美联储加息押注，联储地区银行董事会多数曾主张加息；日本服务价格创36年最大涨幅、澳大利亚核心通胀意外加速，也强化紧缩预期。今日A股需关注AI算力链情绪外溢及阿里潜在离岸发债动向，国内政策与资金面催化在所给素材中暂无新增信息。</div>
+      <div class="overview-text">隔夜美股在英伟达反弹动能消退后回落，亚洲科技股进一步承压，市场重新审视AI交易估值与持续性。美国关税计划推升通胀和加息预期，黄金走弱，投资者等待关键通胀数据。澳大利亚核心通胀意外加速，日本企业服务价格创36年高位，全球主要央行的降息空间受到挤压。今日A股与港股科技线需关注AI产业链情绪传导、英伟达管理层与中美科技博弈，同时警惕海外利率上行、地缘冲突及高估值板块补跌风险。</div>
+      <div class="spotlight-wrap">  <div class="spotlight-header">⚡ 今日必读重磅速达（按重要性排序）</div>  <div class="spotlight-list"><a class="spotlight-item" href="#us-1">  <span class="spotlight-badge">🔥 5★</span>  <span class="spotlight-sec">美股/全球</span>  <span class="spotlight-title">华为被美国陪审团裁定多项罪名成立</span>  <span class="spotlight-arrow">↓</span></a><a class="spotlight-item" href="#us-2">  <span class="spotlight-badge">🔥 5★</span>  <span class="spotlight-sec">美股/全球</span>  <span class="spotlight-title">AI反弹失速，亚洲科技股集体下挫</span>  <span class="spotlight-arrow">↓</span></a></div></div>
     </section>
 
-    <section id="us-global" class="section">
+    <div class="filter-bar">
+      <div class="filter-pills" role="group" aria-label="新闻筛选">
+        <button class="filter-btn active" type="button" data-filter="all">全部资讯</button>
+        <button class="filter-btn" type="button" data-filter="top">🔥 重磅 4-5★</button>
+        <button class="filter-btn" type="button" data-filter="bull">▲ 仅看利好</button>
+        <button class="filter-btn" type="button" data-filter="bear">▼ 仅看利空</button>
+      </div>
+      <div class="search-box">
+        <span class="search-icon">🔍</span>
+        <input class="search-input" id="searchInput" type="search" placeholder="搜索公司、板块或关键词..." />
+      </div>
+    </div>
+
+    <section id="us-global" class="section" data-section="us">
       <div class="section-header">
         <h2 class="section-title">🇺🇸 美股与全球财经</h2>
-        <span class="section-count">6 条精选</span>
+        <span class="section-count" data-count-for="us">6 条精选</span>
       </div>
       <div class="news-list">
-        <article class="news-card">  <div class="news-top">    <span class="news-idx">#01</span>    <span class="tag-pill">美股</span>    <span class="sent-pill sent-bear">利空</span>  </div>  <h3 class="news-title">AI反弹降温，美股期指走软</h3>  <p class="news-fact">标普500与纳斯达克综合指数周二收跌，英伟达此前一日上涨部分回吐；亚洲科技股跟随走弱。投资者等待美国通胀数据，周三美股期指下滑，市场重新评估AI交易拥挤度与科技股估值。</p>  <div class="news-impact"><span>逻辑推演</span>通胀数据若强化加息预期，成长股估值或再承压；半导体与高估值科技板块短线波动风险上升。</div>  <div class="news-footer">    <span>CNBC财经 · 08:41</span>    <a class="source-link" href="https://www.cnbc.com/2026/11/24/stock-market-today-live-updates-.html" target="_blank" rel="noopener noreferrer">阅读原文 ↗</a>  </div></article>
-<article class="news-card">  <div class="news-top">    <span class="news-idx">#02</span>    <span class="tag-pill">财报</span>    <span class="sent-pill sent-bull">利好</span>  </div>  <h3 class="news-title">戴尔上调全年指引，AI服务器需求强劲</h3>  <p class="news-fact">戴尔第三财季业绩创纪录，AI服务器需求推动销售增长，公司上调全年展望；第三季度总销售额同比超过翻倍，并授权250亿美元股票回购。首席财务官称公司进入第四季度时未见需求放缓迹象。</p>  <div class="news-impact"><span>逻辑推演</span>订单与指引显示数据中心资本开支仍有支撑，利好服务器、网络设备及电源散热链，但需关注AI投资回报与客户集中度。</div>  <div class="news-footer">    <span>路透商业 · 07:15</span>    <a class="source-link" href="https://news.google.com/rss/articles/CBMiugFBVV95cUxOZG1EVmJTYUpyMnJPVzlHNE9xZFZpYmZHdkZBOTgtSllCbnRLQnNuUWtLNktuYXJqZms4Tl85T2I2dU41UmEzTWpPY0Z6TU5uaVJJZWZxLXhVcWxSa0h6cUh5bkpSdk9VdDN5QlIzb3hSLUhRV0FaM2FrVzlkUDJoN2FaeUxKOEhlN2RsZ1VoUUUwNHdTcWp6cV9BNE90ejFEVWRTcWtnbW9XV1A0VEhnSDRhMWVhbkFia1E?oc=5" target="_blank" rel="noopener noreferrer">阅读原文 ↗</a>  </div></article>
-<article class="news-card">  <div class="news-top">    <span class="news-idx">#03</span>    <span class="tag-pill">美联储</span>    <span class="sent-pill sent-bear">利空</span>  </div>  <h3 class="news-title">多数联储地区董事会曾建议加息</h3>  <p class="news-fact">美联储12家地区银行董事会中有8家，在10月联邦公开市场委员会会议前建议上调贴现贷款利率；当次会议政策制定者最终维持基准利率不变。该信号显示部分地区对通胀与利率仍偏鹰派。</p>  <div class="news-impact"><span>逻辑推演</span>加息倾向可能抬高美债收益率与美元，压制黄金及长久期成长股；后续通胀数据将决定市场是否进一步调整利率路径。</div>  <div class="news-footer">    <span>彭博宏观 · 03:36</span>    <a class="source-link" href="https://www.bloomberg.com/news/articles/2026-11-24/most-fed-regional-boards-wanted-to-raise-rates-in-october" target="_blank" rel="noopener noreferrer">阅读原文 ↗</a>  </div></article>
-<article class="news-card">  <div class="news-top">    <span class="news-idx">#04</span>    <span class="tag-pill">宏观</span>    <span class="sent-pill sent-bear">利空</span>  </div>  <h3 class="news-title">日本企业服务价格创36年最大涨幅</h3>  <p class="news-fact">日本企业服务价格涨幅升至1990年以来最高水平，服务通胀压力增强。彭博称这一数据为日本央行下月再次加息提供了新的理由；路透亦报道，日本关键服务通胀指标触及36年高位。</p>  <div class="news-impact"><span>逻辑推演</span>日银收紧预期可能支撑日元并推高日本利率，影响日股估值与套息交易；亚洲市场利率敏感资产需留意资金回流风险。</div>  <div class="news-footer">    <span>彭博宏观 · 09:18</span>    <a class="source-link" href="https://www.bloomberg.com/news/articles/2026-11-25/japan-s-service-prices-for-businesses-jump-by-most-in-36-years" target="_blank" rel="noopener noreferrer">阅读原文 ↗</a>  </div></article>
-<article class="news-card">  <div class="news-top">    <span class="news-idx">#05</span>    <span class="tag-pill">宏观</span>    <span class="sent-pill sent-bear">利空</span>  </div>  <h3 class="news-title">澳大利亚核心通胀意外加速</h3>  <p class="news-fact">澳大利亚10月核心通胀意外加快，显示经济价格压力持续，印证澳大利亚储备银行官员近期偏鹰表态。与此同时，RBA副行长Jacobs称当地金融条件明显具有限制性。</p>  <div class="news-impact"><span>逻辑推演</span>通胀黏性令降息空间受限，澳债收益率与澳元或受支撑；利率维持高位也可能压制澳洲消费及利率敏感板块。</div>  <div class="news-footer">    <span>彭博市场 · 08:32</span>    <a class="source-link" href="https://www.bloomberg.com/news/articles/2026-11-25/australian-inflation-accelerates-even-after-rba-rate-hikes" target="_blank" rel="noopener noreferrer">阅读原文 ↗</a>  </div></article>
-<article class="news-card">  <div class="news-top">    <span class="news-idx">#06</span>    <span class="tag-pill">宏观</span>    <span class="sent-pill sent-neu">中性</span>  </div>  <h3 class="news-title">油价回落，供应过剩担忧压过地缘风险</h3>  <p class="news-fact">路透报道，油价下跌，市场对供应过剩的担忧超过中东局势扰动可能造成供应中断的顾虑。彭博另称，白宫最新关税计划令股市承压，并强化市场对美联储加息的预期，金价因而持稳于跌势。</p>  <div class="news-impact"><span>逻辑推演</span>供应宽松预期压制原油与能源股，但地缘风险仍构成反向支撑；通胀与利率预期共同影响黄金、美元及风险资产。</div>  <div class="news-footer">    <span>路透商业 · 09:58</span>    <a class="source-link" href="https://news.google.com/rss/articles/CBMiwgFBVV95cUxOVGl4Nzdfc01ReTB5TnAxUkVLTXlaRVFvbGM5aTZDOEtVUXlrVDQtMHJwcWh2WldoMnVyb0QxU1pEQUoyN09sNU1SZXR3NVUzdTZXeWpkdGNTZW95MUtmdjV3dWFxTEZsRW5WUlF1djVTTWZxUGVxcHhPNEptMnBEcmZ0MURhX0JxTDFqc19HblpWd2hLSEs5SXRYTXB6bzFwNzZqOUFTc1ZOM3ItVDFZWmM2a0R5YkxsdnlsMTZWQ1ZEUQ?oc=5" target="_blank" rel="noopener noreferrer">阅读原文 ↗</a>  </div></article>
+        <article id="us-1" class="news-card is-breaking" data-score="5" data-sentiment="bear">  <div class="news-top">    <span class="news-idx">#01</span>    <span class="breaking-pill">🔥 重磅头条 · ★★★★★</span>    <span class="tag-pill">美股/科技/地缘</span>    <span class="sent-pill sent-bear">▼ 利空</span>  </div>  <h3 class="news-title">华为被美国陪审团裁定多项罪名成立</h3>  <p class="news-fact">美国陪审团裁定华为涉嫌银行欺诈、洗钱、窃取商业秘密共谋等多项罪名成立，案件还涉及华为就其在伊朗和朝鲜业务向银行作出虚假陈述。</p>  <div class="news-impact">  <span class="impact-label">深度逻辑</span>  <span>中美科技与贸易摩擦面临升级风险，华为供应链、全球电信设备及中国科技资产的政策折价可能扩大。</span></div>  <div class="news-footer">    <span class="source-meta">📰 CNBC/彭博科技 · 10:38</span>    <a class="source-link" href="https://www.cnbc.com/2026/11/25/huawei-fraud-trade-trial.html" target="_blank" rel="noopener noreferrer">阅读原文 ↗</a>  </div></article>
+<article id="us-2" class="news-card is-breaking" data-score="5" data-sentiment="bear">  <div class="news-top">    <span class="news-idx">#02</span>    <span class="breaking-pill">🔥 重磅头条 · ★★★★★</span>    <span class="tag-pill">美股/科技/宏观</span>    <span class="sent-pill sent-bear">▼ 利空</span>  </div>  <h3 class="news-title">AI反弹失速，亚洲科技股集体下挫</h3>  <p class="news-fact">英伟达此前由黄仁勋回归带来的上涨动能减弱，华尔街科技股回落后，亚洲市场的AI交易重新遭到质疑。软银股价下跌14%，日本半导体股领跌。</p>  <div class="news-impact">  <span class="impact-label">深度逻辑</span>  <span>高估值AI与半导体板块面临获利回吐，英伟达、亚洲芯片股及A股算力链的短线波动率上升。</span></div>  <div class="news-footer">    <span class="source-meta">📰 CNBC/金融时报/路透 · 09:57</span>    <a class="source-link" href="https://www.cnbc.com/2026/11/25/tech-stocks-softbank-group-advantest-sk-hynix-samsung.html" target="_blank" rel="noopener noreferrer">阅读原文 ↗</a>  </div></article>
+<article id="us-3" class="news-card" data-score="4" data-sentiment="bull">  <div class="news-top">    <span class="news-idx">#03</span>    <span class="score-pill" title="重磅指数 4/5"><span class="stars-on">★★★★</span><span class="stars-off">☆</span></span>    <span class="tag-pill">美股/科技/财报</span>    <span class="sent-pill sent-bull">▲ 利好</span>  </div>  <h3 class="news-title">戴尔AI服务器需求强劲，上调全年展望</h3>  <p class="news-fact">戴尔公布创纪录季度业绩，AI服务器需求推动公司上调全年预测；公司第三季度整体销售额同比增长超过一倍，并授权实施250亿美元股票回购。</p>  <div class="news-impact">  <span class="impact-label">深度逻辑</span>  <span>验证AI基础设施需求仍具韧性，利好服务器、数据中心和电源链，但难以完全抵消科技股整体估值收缩压力。</span></div>  <div class="news-footer">    <span class="source-meta">📰 路透/CNBC · 07:15</span>    <a class="source-link" href="https://www.cnbc.com/2026/11/24/dell-earnings-report-q3-2027.html" target="_blank" rel="noopener noreferrer">阅读原文 ↗</a>  </div></article>
+<article id="us-4" class="news-card" data-score="4" data-sentiment="bear">  <div class="news-top">    <span class="news-idx">#04</span>    <span class="score-pill" title="重磅指数 4/5"><span class="stars-on">★★★★</span><span class="stars-off">☆</span></span>    <span class="tag-pill">宏观/央行/澳洲</span>    <span class="sent-pill sent-bear">▼ 利空</span>  </div>  <h3 class="news-title">澳大利亚核心通胀意外加速</h3>  <p class="news-fact">澳大利亚10月核心通胀意外加快，显示价格压力仍具黏性。澳洲联储官员Jacobs表示，连续五次加息后，金融条件已经明显具有限制性。</p>  <div class="news-impact">  <span class="impact-label">深度逻辑</span>  <span>澳洲联储鹰派立场得到数据支持，澳元和当地债券收益率承压，也会强化全球利率维持高位的交易。</span></div>  <div class="news-footer">    <span class="source-meta">📰 彭博/路透 · 08:32</span>    <a class="source-link" href="https://www.bloomberg.com/news/articles/2026-11-25/australian-inflation-accelerates-even-after-rba-rate-hikes" target="_blank" rel="noopener noreferrer">阅读原文 ↗</a>  </div></article>
+<article id="us-5" class="news-card" data-score="4" data-sentiment="bear">  <div class="news-top">    <span class="news-idx">#05</span>    <span class="score-pill" title="重磅指数 4/5"><span class="stars-on">★★★★</span><span class="stars-off">☆</span></span>    <span class="tag-pill">宏观/日本/央行</span>    <span class="sent-pill sent-bear">▼ 利空</span>  </div>  <h3 class="news-title">日本企业服务价格创36年最大涨幅</h3>  <p class="news-fact">日本企业服务价格涨幅达到1990年以来最高水平，为日本央行下月再次上调基准利率提供新的理由。路透称，日本关键服务通胀指标同样触及36年高位。</p>  <div class="news-impact">  <span class="impact-label">深度逻辑</span>  <span>日元利率上行预期升温，日股估值和高杠杆交易承压，亚洲市场资金成本与风险偏好面临双重扰动。</span></div>  <div class="news-footer">    <span class="source-meta">📰 彭博/路透 · 09:18</span>    <a class="source-link" href="https://www.bloomberg.com/news/articles/2026-11-25/japan-s-service-prices-for-businesses-jump-by-most-in-36-years" target="_blank" rel="noopener noreferrer">阅读原文 ↗</a>  </div></article>
+<article id="us-6" class="news-card" data-score="3" data-sentiment="bear">  <div class="news-top">    <span class="news-idx">#06</span>    <span class="score-pill" title="重磅指数 3/5"><span class="stars-on">★★★</span><span class="stars-off">☆☆</span></span>    <span class="tag-pill">美联储/利率/宏观</span>    <span class="sent-pill sent-bear">▼ 利空</span>  </div>  <h3 class="news-title">多数美联储地区银行支持加息</h3>  <p class="news-fact">彭博援引资料称，在10月联邦公开市场委员会维持基准利率不变前，美联储12家地区银行中有8家董事会建议上调贴现贷款利率。</p>  <div class="news-impact">  <span class="impact-label">深度逻辑</span>  <span>显示金融体系内部仍存在较强鹰派压力，可能抬升美元和美债收益率，并压制成长股估值及黄金表现。</span></div>  <div class="news-footer">    <span class="source-meta">📰 彭博宏观 · 03:36</span>    <a class="source-link" href="https://www.bloomberg.com/news/articles/2026-11-24/most-fed-regional-boards-wanted-to-raise-rates-in-october" target="_blank" rel="noopener noreferrer">阅读原文 ↗</a>  </div></article>
       </div>
+      <div class="empty-hint" data-empty-for="us">当前筛选条件下暂无美股/全球财经新闻</div>
     </section>
 
-    <section id="cn-a" class="section">
+    <section id="cn-a" class="section" data-section="cn">
       <div class="section-header">
         <h2 class="section-title">🇨🇳 A 股与国内宏观</h2>
-        <span class="section-count">5 条精选</span>
+        <span class="section-count" data-count-for="cn">5 条精选</span>
       </div>
       <div class="news-list">
-        <article class="news-card">  <div class="news-top">    <span class="news-idx">#01</span>    <span class="tag-pill">产业</span>    <span class="sent-pill sent-neu">中性</span>  </div>  <h3 class="news-title">阿里与银行讨论明年离岸发债</h3>  <p class="news-fact">彭博援引知情人士称，阿里巴巴集团近几周已与银行讨论明年可能在离岸债券市场融资，涉及人民币及美元债。报道未披露拟发行规模、时间表或融资用途，方案仍处于讨论阶段。</p>  <div class="news-impact"><span>逻辑推演</span>若融资落地，可提升云与电商业务的资金灵活度；发行规模、期限及资金用途将影响市场对其资本开支和信用状况的判断。</div>  <div class="news-footer">    <span>彭博科技 · 09:38</span>    <span></span>  </div></article>
-<article class="news-card">  <div class="news-top">    <span class="news-idx">#02</span>    <span class="tag-pill">产业</span>    <span class="sent-pill sent-neu">中性</span>  </div>  <h3 class="news-title">英伟达风波凸显中美AI人才竞争</h3>  <p class="news-fact">CNBC分析称，黄仁勋重返英伟达管理层显示，中美人工智能竞争不只围绕芯片，也涉及技术人才。路透报道，他的回归同时令美国政策圈重新聚焦开放权重AI模型的讨论。</p>  <div class="news-impact"><span>逻辑推演</span>国产算力竞争不仅取决于芯片供给，也取决于人才与软件生态；相关讨论或提高市场对AI产业链政策和人才流动的关注。</div>  <div class="news-footer">    <span>CNBC财经 · 09:13</span>    <span></span>  </div></article>
-<article class="news-card">  <div class="news-top">    <span class="news-idx">#03</span>    <span class="tag-pill">A股</span>    <span class="sent-pill sent-bear">利空</span>  </div>  <h3 class="news-title">亚洲科技股承压，AI交易风险再起</h3>  <p class="news-fact">美股科技股回落后，亚洲科技股周三普遍走弱，软银下跌14%，日本半导体股领跌。金融时报称，华尔街此前由英伟达带动的反弹势头消退，投资者重新担忧AI交易；素材未提供A股具体行情。</p>  <div class="news-impact"><span>逻辑推演</span>外部风险偏好降温可能传导至A股算力、半导体及高估值成长股；盘面需观察资金是否从AI主线向低波动板块切换。</div>  <div class="news-footer">    <span>CNBC财经 · 09:57</span>    <span></span>  </div></article>
-<article class="news-card">  <div class="news-top">    <span class="news-idx">#04</span>    <span class="tag-pill">政策</span>    <span class="sent-pill sent-neu">中性</span>  </div>  <h3 class="news-title">陈吉宁被查引发政治局人事关注</h3>  <p class="news-fact">BBC中文报道，陈吉宁被调查，距下一次党代会换届不到一年；报道指出，他此前被视为观察后续高层人事布局的重要人物，被查前六天仍公开调研。素材未提供调查细节或官方通报。</p>  <div class="news-impact"><span>逻辑推演</span>高层人事变化可能增加政策预期不确定性，但现有素材不足以判断对具体行业或市场的直接影响。</div>  <div class="news-footer">    <span>BBC中文 · 11-24 22:54</span>    <span></span>  </div></article>
-<article class="news-card">  <div class="news-top">    <span class="news-idx">#05</span>    <span class="tag-pill">产业</span>    <span class="sent-pill sent-neu">中性</span>  </div>  <h3 class="news-title">AI芯片景气推升韩国半导体与韩元预期</h3>  <p class="news-fact">彭博称，韩国AI芯片景气带来年末资金流动，韩元可能延续近十年来表现最佳年份的涨势。同期韩国科技股受到AI交易担忧冲击，报道未提供芯片出货或企业盈利的具体增幅。</p>  <div class="news-impact"><span>逻辑推演</span>海外AI需求仍是半导体链的重要观察变量，但汇率和风险偏好波动可能放大板块行情；对A股芯片链的映射需结合自身订单验证。</div>  <div class="news-footer">    <span>彭博科技 · 09:41</span>    <span></span>  </div></article>
+        <article id="cn-1" class="news-card" data-score="4" data-sentiment="neutral">  <div class="news-top">    <span class="news-idx">#01</span>    <span class="score-pill" title="重磅指数 4/5"><span class="stars-on">★★★★</span><span class="stars-off">☆</span></span>    <span class="tag-pill">港股/科技/融资</span>    <span class="sent-pill sent-neu">● 中性</span>  </div>  <h3 class="news-title">阿里巴巴筹划明年发行离岸债券</h3>  <p class="news-fact">知情人士称，阿里巴巴近几周已与银行讨论明年在离岸市场融资，潜在方案包括发行人民币债券和美元债券，具体规模与发行时间尚未确定。</p>  <div class="news-impact">  <span class="impact-label">深度逻辑</span>  <span>显示大型平台仍在优化全球融资渠道，利好云业务与资本运作预期，但新增债务也会引发市场对资金用途和杠杆水平的关注。</span></div>  <div class="news-footer">    <span class="source-meta">📰 彭博科技 · 09:38</span>    <span class="source-nolink">快讯电报</span>  </div></article>
+<article id="cn-2" class="news-card" data-score="4" data-sentiment="bear">  <div class="news-top">    <span class="news-idx">#02</span>    <span class="score-pill" title="重磅指数 4/5"><span class="stars-on">★★★★</span><span class="stars-off">☆</span></span>    <span class="tag-pill">A股/港股/科技</span>    <span class="sent-pill sent-bear">▼ 利空</span>  </div>  <h3 class="news-title">亚洲AI交易退潮，半导体板块承压</h3>  <p class="news-fact">华尔街AI反弹未能延续，东京和首尔科技股下跌，软银股价重挫14%，日本半导体股领跌。市场重新评估AI交易的估值与持续性。</p>  <div class="news-impact">  <span class="impact-label">深度逻辑</span>  <span>A股算力、光模块、半导体等高弹性科技线或受情绪外溢影响，资金可能转向低估值和防御型方向。</span></div>  <div class="news-footer">    <span class="source-meta">📰 金融时报/CNBC · 09:41</span>    <span class="source-nolink">快讯电报</span>  </div></article>
+<article id="cn-3" class="news-card" data-score="4" data-sentiment="neutral">  <div class="news-top">    <span class="news-idx">#03</span>    <span class="score-pill" title="重磅指数 4/5"><span class="stars-on">★★★★</span><span class="stars-off">☆</span></span>    <span class="tag-pill">A股/产业/科技</span>    <span class="sent-pill sent-neu">● 中性</span>  </div>  <h3 class="news-title">黄仁勋回归凸显中美AI人才争夺</h3>  <p class="news-fact">CNBC称，黄仁勋重返英伟达CEO岗位，显示中美人工智能竞争不仅围绕芯片，也围绕顶尖科技人才。特朗普还表示，必要时愿意考虑赦免黄仁勋。</p>  <div class="news-impact">  <span class="impact-label">深度逻辑</span>  <span>英伟达管理层与政策风险继续影响全球AI估值，A股相关供应链关注度维持高位，但事件驱动的不确定性同步上升。</span></div>  <div class="news-footer">    <span class="source-meta">📰 CNBC · 09:13</span>    <a class="source-link" href="https://www.cnbc.com/2026/11/25/jensen-huang-nvidia-ai-talent-race.html" target="_blank" rel="noopener noreferrer">阅读原文 ↗</a>  </div></article>
+<article id="cn-4" class="news-card" data-score="3" data-sentiment="bear">  <div class="news-top">    <span class="news-idx">#04</span>    <span class="score-pill" title="重磅指数 3/5"><span class="stars-on">★★★</span><span class="stars-off">☆☆</span></span>    <span class="tag-pill">港股/消费/监管</span>    <span class="sent-pill sent-bear">▼ 利空</span>  </div>  <h3 class="news-title">希音将支付1亿美元解决美国指控</h3>  <p class="news-fact">金融时报称，希音将支付1亿美元，以解决美国监管机构关于其误导消费者的指控。监管方称，该零售商供应商宣称部分棉花产自美国，但实际在中国采收。</p>  <div class="news-impact">  <span class="impact-label">深度逻辑</span>  <span>跨境电商面临更高合规与供应链透明度要求，相关平台估值和海外扩张节奏可能受到监管成本约束。</span></div>  <div class="news-footer">    <span class="source-meta">📰 金融时报 · 10:00</span>    <span class="source-nolink">快讯电报</span>  </div></article>
+<article id="cn-5" class="news-card" data-score="3" data-sentiment="neutral">  <div class="news-top">    <span class="news-idx">#05</span>    <span class="score-pill" title="重磅指数 3/5"><span class="stars-on">★★★</span><span class="stars-off">☆☆</span></span>    <span class="tag-pill">A股/科技/供应链</span>    <span class="sent-pill sent-neu">● 中性</span>  </div>  <h3 class="news-title">华为美国刑事案件被裁定罪名成立</h3>  <p class="news-fact">美国陪审团裁定华为涉及银行欺诈、洗钱及窃取商业秘密共谋等多项罪名成立，案件还牵涉其在伊朗和朝鲜业务中的银行陈述问题。</p>  <div class="news-impact">  <span class="impact-label">深度逻辑</span>  <span>华为及国产替代主题或获得关注，但案件可能加剧中美科技限制，海外业务、设备供应链和相关资产风险溢价上升。</span></div>  <div class="news-footer">    <span class="source-meta">📰 CNBC/彭博科技 · 10:38</span>    <span class="source-nolink">快讯电报</span>  </div></article>
       </div>
+      <div class="empty-hint" data-empty-for="cn">当前筛选条件下暂无 A 股/宏观新闻</div>
     </section>
 
-    <section id="general" class="section">
+    <section id="general" class="section" data-section="gen">
       <div class="section-header">
         <h2 class="section-title">🌐 国际时政与前沿科技</h2>
-        <span class="section-count">4 条精选</span>
+        <span class="section-count" data-count-for="gen">4 条精选</span>
       </div>
       <div class="news-list">
-        <article class="news-card">  <div class="news-top">    <span class="news-idx">#01</span>    <span class="tag-pill">国际/地缘</span>      </div>  <h3 class="news-title">胡塞武装袭击沙特主权基金大楼致11人受伤</h3>  <p class="news-fact">CNBC报道，伊朗支持的胡塞武装袭击沙特公共投资基金PIF所在大楼，造成11人受伤；这是该组织六天内第二次袭击该大楼，前一次未造成人员伤亡。事件加剧红海及中东局势不确定性。</p>    <div class="news-footer">    <span>CNBC财经 · 10:33</span>    <a class="source-link" href="https://www.cnbc.com/2026/11/25/us-iran-war-trump-hormuz-houthi-saudi-pif-tower.html" target="_blank" rel="noopener noreferrer">阅读原文 ↗</a>  </div></article>
-<article class="news-card">  <div class="news-top">    <span class="news-idx">#02</span>    <span class="tag-pill">国际/科技政策</span>      </div>  <h3 class="news-title">美国批评澳大利亚社媒监管法案</h3>  <p class="news-fact">美国驻澳大利亚大使称，澳方拟议的社交媒体平台监管立法将限制言论自由，并对美国企业造成不公平负担。彭博指出，相关表态为两国围绕科技监管措施的争端埋下伏笔。</p>    <div class="news-footer">    <span>彭博科技 · 10:00</span>    <a class="source-link" href="https://www.bloomberg.com/news/articles/2026-11-25/us-criticizes-australia-social-media-law-as-harming-free-speech" target="_blank" rel="noopener noreferrer">阅读原文 ↗</a>  </div></article>
-<article class="news-card">  <div class="news-top">    <span class="news-idx">#03</span>    <span class="tag-pill">国际/地缘</span>      </div>  <h3 class="news-title">俄军袭击乌克兰敖德萨地区致两人死亡</h3>  <p class="news-fact">路透援引当地州长消息称，俄罗斯对乌克兰敖德萨地区发动袭击，造成两人死亡。现有素材未提供袭击目标、武器类型或后续军事行动信息，黑海周边局势仍是能源与航运风险的观察点。</p>    <div class="news-footer">    <span>路透国际 · 09:26</span>    <a class="source-link" href="https://news.google.com/rss/articles/CBMirgFBVV95cUxNVVJGWmhSeU5uWXkwNElJa0F4SFVNaGFObjNhWThIblk0dTkzeW9wVUhwZS0yVzYtQjY3NHd5V3A1MUQ4c1hzQm5WTGhmMXBoQ2R3aDNweHUwalV2bFZJNkZHWGI1akhWMW5sY0VoUVE0SXRDOXN4NWpNRTFyQmFyLUx2b1lhaG9NNWJRTkhjVHV4Z0d6NFliQklkel9SVzhUbGJGY0h0Vzg5czZaYmc?oc=5" target="_blank" rel="noopener noreferrer">阅读原文 ↗</a>  </div></article>
-<article class="news-card">  <div class="news-top">    <span class="news-idx">#04</span>    <span class="tag-pill">AI科技</span>      </div>  <h3 class="news-title">黄仁勋回归将AI人才与开放模型推上风口</h3>  <p class="news-fact">CNBC认为，黄仁勋重掌英伟达凸显中美AI竞争不仅是芯片之争，也是人才竞争；路透则称，此事推动华盛顿重新讨论开放权重模型。美国总统特朗普还表示，若有需要愿意赦免黄仁勋，政治与科技议题交织升温。</p>    <div class="news-footer">    <span>CNBC科技 · 09:13</span>    <a class="source-link" href="https://www.cnbc.com/2026/11/25/jensen-huang-nvidia-ai-talent-race.html" target="_blank" rel="noopener noreferrer">阅读原文 ↗</a>  </div></article>
+        <article id="gen-1" class="news-card" data-score="4" data-sentiment="neutral">  <div class="news-top">    <span class="news-idx">#01</span>    <span class="score-pill" title="重磅指数 4/5"><span class="stars-on">★★★★</span><span class="stars-off">☆</span></span>    <span class="tag-pill">地缘/中东/能源</span>      </div>  <h3 class="news-title">胡塞武装袭击沙特主权基金大楼</h3>  <p class="news-fact">伊朗支持的胡塞武装袭击沙特公共投资基金大楼，造成11人受伤。这是该组织六天内第二次袭击该建筑，前一次袭击没有造成人员伤亡，事件加剧中东安全与能源供应担忧。</p>    <div class="news-footer">    <span class="source-meta">📰 CNBC · 10:36</span>    <a class="source-link" href="https://www.cnbc.com/2026/11/25/us-iran-war-trump-hormuz-houthi-saudi-pif-tower.html" target="_blank" rel="noopener noreferrer">阅读原文 ↗</a>  </div></article>
+<article id="gen-2" class="news-card" data-score="4" data-sentiment="neutral">  <div class="news-top">    <span class="news-idx">#02</span>    <span class="score-pill" title="重磅指数 4/5"><span class="stars-on">★★★★</span><span class="stars-off">☆</span></span>    <span class="tag-pill">国际/贸易/科技监管</span>      </div>  <h3 class="news-title">美国批评澳大利亚社交媒体监管法案</h3>  <p class="news-fact">美国驻澳大利亚大使称，澳方拟议的主要科技企业监管立法将限制言论自由，并对美国企业构成不公平影响。相关表态为两国围绕科技监管措施的潜在争端铺路。</p>    <div class="news-footer">    <span class="source-meta">📰 彭博科技 · 10:00</span>    <a class="source-link" href="https://www.bloomberg.com/news/articles/2026-11-25/us-criticizes-australia-social-media-law-as-harming-free-speech" target="_blank" rel="noopener noreferrer">阅读原文 ↗</a>  </div></article>
+<article id="gen-3" class="news-card" data-score="3" data-sentiment="neutral">  <div class="news-top">    <span class="news-idx">#03</span>    <span class="score-pill" title="重磅指数 3/5"><span class="stars-on">★★★</span><span class="stars-off">☆☆</span></span>    <span class="tag-pill">能源/地缘/商品</span>      </div>  <h3 class="news-title">油价下跌，供应过剩担忧压过中东风险</h3>  <p class="news-fact">路透称，市场对供应过剩的担忧抵消了中东局势可能扰乱供应的风险，国际油价走低。油价回落缓解部分通胀压力，但也反映投资者对需求和全球经济前景的谨慎。</p>    <div class="news-footer">    <span class="source-meta">📰 路透商业 · 09:58</span>    <a class="source-link" href="https://news.google.com/rss/articles/CBMiwgFBVV95cUxOVGl4Nzdfc01ReTB5TnAxUkVLTXlaRVFvbGM5aTZDOEtVUXlrVDQtMHJwcWh2WldoMnVyb0QxU1pEQUoyN09sNU1SZXR3NVUzdTZXeWpkdGNTZW95MUtmdjV3dWFxTEZsRW5WUlF1djVTTWZxUGVxcHhPNEptMnBEcmZ0MURhX0JxTDFqc19HblpWd2hLSEs5SXRYTXB6bzFwNzZqOUFTc1ZOM3ItVDFZWmM2a0R5YkxsdnlsMTZWQ1ZEUQ?oc=5" target="_blank" rel="noopener noreferrer">阅读原文 ↗</a>  </div></article>
+<article id="gen-4" class="news-card" data-score="3" data-sentiment="neutral">  <div class="news-top">    <span class="news-idx">#04</span>    <span class="score-pill" title="重磅指数 3/5"><span class="stars-on">★★★</span><span class="stars-off">☆☆</span></span>    <span class="tag-pill">国际/东欧/地缘</span>      </div>  <h3 class="news-title">俄军袭击乌克兰敖德萨地区致两人死亡</h3>  <p class="news-fact">路透援引当地州长消息称，俄罗斯对乌克兰敖德萨地区发动袭击，造成两人死亡。敖德萨是乌克兰重要港口和物流节点，相关冲突仍对黑海航运与农产品出口构成风险。</p>    <div class="news-footer">    <span class="source-meta">📰 路透国际 · 09:26</span>    <a class="source-link" href="https://news.google.com/rss/articles/CBMirgFBVV95cUxNVVJGWmhSeU5uWXkwNElJa0F4SFVNaGFObjNhWThIblk0dTkzeW9wVUhwZS0yVzYtQjY3NHd5V3A1MUQ4c1hzQm5WTGhmMXBoQ2R3aDNweHUwalV2bFZJNkZHWGI1akhWMW5sY0VoUVE0SXRDOXN4NWpNRTFyQmFyLUx2b1lhaG9NNWJRTkhjVHV4Z0d6NFliQklkel9SVzhUbGJGY0h0Vzg5czZaYmc?oc=5" target="_blank" rel="noopener noreferrer">阅读原文 ↗</a>  </div></article>
       </div>
+      <div class="empty-hint" data-empty-for="gen">当前筛选条件下暂无国际/科技新闻</div>
     </section>
 
     <footer>
-      <div>权威信源：Bloomberg · Financial Times · Reuters · WSJ · CNBC · 财联社 · BBC（严格 24 小时时效过滤）</div>
-      <div>行情数据：Yahoo Finance &amp; 东方财富（代码直出，零模型幻觉） · 自动生成于 GitHub Actions</div>
+      <div>权威信源：Bloomberg · Financial Times · Reuters · WSJ · CNBC · 财联社 · BBC（严格 24h 时效过滤 · 按重磅程度排序）</div>
+      <div>精准行情：Yahoo Finance &amp; 东方财富（代码直出，零模型幻觉） · 每日定时生成于 GitHub Actions</div>
     </footer>
   </main>
 
+  <button class="back-top" id="backTop" type="button" aria-label="返回顶部">↑</button>
+
   <script>
     (function () {
+      // 1. 主题切换
       const root = document.documentElement;
-      const btn = document.getElementById("themeToggle");
+      const themeBtn = document.getElementById("themeToggle");
       const saved = localStorage.getItem("brief-theme") || "dark";
       function applyTheme(t) {
         root.setAttribute("data-theme", t);
-        btn.textContent = t === "dark" ? "☀️ 浅色" : "🌙 深色";
+        themeBtn.textContent = t === "dark" ? "☀️ 浅色" : "🌙 深色";
       }
       applyTheme(saved);
-      btn.addEventListener("click", function () {
+      themeBtn.addEventListener("click", function () {
         const next = root.getAttribute("data-theme") === "dark" ? "light" : "dark";
         localStorage.setItem("brief-theme", next);
         applyTheme(next);
       });
+
+      // 2. 阅读进度条 & 返回顶部
+      const progressEl = document.getElementById("readProgress");
+      const backTopBtn = document.getElementById("backTop");
+      window.addEventListener("scroll", function () {
+        const scrollTop = window.scrollY || document.documentElement.scrollTop;
+        const docHeight = document.documentElement.scrollHeight - window.innerHeight;
+        const pct = docHeight > 0 ? Math.min(100, (scrollTop / docHeight) * 100) : 0;
+        progressEl.style.width = pct + "%";
+        backTopBtn.classList.toggle("visible", scrollTop > 420);
+      }, { passive: true });
+      backTopBtn.addEventListener("click", function () {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      });
+
+      // 3. 实时筛选与关键词搜索
+      let activeFilter = "all";
+      const filterBtns = document.querySelectorAll(".filter-btn");
+      const searchInput = document.getElementById("searchInput");
+      const sections = document.querySelectorAll("section[data-section]");
+
+      function applyFilters() {
+        const kw = (searchInput.value || "").trim().toLowerCase();
+        sections.forEach(function (sec) {
+          const secKey = sec.getAttribute("data-section");
+          const cards = sec.querySelectorAll(".news-card");
+          let visibleCount = 0;
+
+          cards.forEach(function (card) {
+            const score = parseInt(card.getAttribute("data-score") || "3", 10);
+            const sent = card.getAttribute("data-sentiment") || "neutral";
+            const text = (card.textContent || "").toLowerCase();
+
+            let matchFilter = true;
+            if (activeFilter === "top") matchFilter = score >= 4;
+            else if (activeFilter === "bull") matchFilter = sent === "bull";
+            else if (activeFilter === "bear") matchFilter = sent === "bear";
+
+            const matchSearch = !kw || text.includes(kw);
+            const show = matchFilter && matchSearch;
+            card.classList.toggle("is-hidden", !show);
+            if (show) visibleCount++;
+          });
+
+          const countEl = document.querySelector('[data-count-for="' + secKey + '"]');
+          const emptyEl = document.querySelector('[data-empty-for="' + secKey + '"]');
+          if (countEl) countEl.textContent = visibleCount + " 条显示";
+          if (emptyEl) emptyEl.classList.toggle("show", visibleCount === 0);
+        });
+      }
+
+      filterBtns.forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          filterBtns.forEach(function (b) { b.classList.remove("active"); });
+          btn.classList.add("active");
+          activeFilter = btn.getAttribute("data-filter") || "all";
+          applyFilters();
+        });
+      });
+      searchInput.addEventListener("input", applyFilters);
     })();
   </script>
 </body>
