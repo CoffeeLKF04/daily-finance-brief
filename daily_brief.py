@@ -1,5 +1,6 @@
 import os
 import re
+import math
 import json
 import calendar
 import datetime
@@ -16,21 +17,48 @@ LLM_BASE_URL = os.environ.get("LLM_BASE_URL", "https://api.deepseek.com")
 LLM_MODEL = os.environ.get("LLM_MODEL", "deepseek-chat")
 
 BJ_TZ = datetime.timezone(datetime.timedelta(hours=8))
-HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
-
-# 国际权威一手财经 RSS（海外节点直连，大模型直译）
-GLOBAL_FINANCE_RSS = {
-    "WSJ市场": "https://feeds.a.dj.com/rss/RSSMarketsMain.xml",
-    "WSJ商业": "https://feeds.a.dj.com/rss/WSJcomUSBusiness.xml",
-    "CNBC财经": "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=100003114",
-    "Yahoo财经": "https://finance.yahoo.com/news/rssindex",
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
 }
 
-# 国际时政与前沿科技 RSS
+# 顶级全球财经一手信源（彭博、金融时报、路透、WSJ、CNBC）
+GLOBAL_FINANCE_RSS = {
+    "彭博市场": [
+        "https://feeds.bloomberg.com/markets/news.rss",
+        "https://news.google.com/rss/search?q=when:24h+site:bloomberg.com/news/articles&hl=en-US&gl=US&ceid=US:en",
+    ],
+    "彭博宏观": [
+        "https://feeds.bloomberg.com/economics/news.rss",
+    ],
+    "金融时报FT": [
+        "https://www.ft.com/markets?format=rss",
+        "https://www.ft.com/global-economy?format=rss",
+    ],
+    "路透商业": [
+        "https://news.google.com/rss/search?q=site:reuters.com/business+when:1d&hl=en-US&gl=US&ceid=US:en",
+    ],
+    "WSJ市场": [
+        "https://feeds.a.dj.com/rss/RSSMarketsMain.xml",
+    ],
+    "CNBC财经": [
+        "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=100003114",
+    ],
+}
+
+# 顶级科技与国际时政信源（彭博科技、路透国际、BBC中文）
 GENERAL_NEWS_RSS = {
-    "BBC中文": "https://feeds.bbci.co.uk/zhongwen/simp/rss.xml",
-    "CNBC科技": "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=19854910",
-    "TechCrunch": "https://techcrunch.com/feed/",
+    "彭博科技": [
+        "https://feeds.bloomberg.com/technology/news.rss",
+    ],
+    "路透国际": [
+        "https://news.google.com/rss/search?q=site:reuters.com/world+when:1d&hl=en-US&gl=US&ceid=US:en",
+    ],
+    "BBC中文": [
+        "https://feeds.bbci.co.uk/zhongwen/simp/rss.xml",
+    ],
+    "CNBC科技": [
+        "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=19854910",
+    ],
 }
 # ====================================================================
 
@@ -44,23 +72,45 @@ def clean_html(raw_html):
 
 
 def fetch_yf_group(tickers_dict):
-    """批量获取 Yahoo Finance 行情"""
+    """批量获取 Yahoo Finance 行情（自动过滤 NaN 并支持 fast_info 兜底）"""
     results = []
     for name, symbol in tickers_dict.items():
+        close, prev = None, None
         try:
-            hist = yf.Ticker(symbol).history(period="5d")
-            if len(hist) >= 2:
-                close = float(hist["Close"].iloc[-1])
-                prev = float(hist["Close"].iloc[-2])
+            ticker = yf.Ticker(symbol)
+            hist = ticker.history(period="10d")
+            if hist is not None and not hist.empty and "Close" in hist.columns:
+                closes = [
+                    float(x)
+                    for x in hist["Close"].dropna().tolist()
+                    if math.isfinite(float(x))
+                ]
+                if len(closes) >= 2:
+                    close, prev = closes[-1], closes[-2]
+
+            # 兜底：若历史日线缺失，尝试 fast_info
+            if close is None or prev is None or prev == 0:
+                info = ticker.fast_info
+                lp = info.get("lastPrice") or info.get("last_price")
+                pc = info.get("previousClose") or info.get("previous_close")
+                if lp is not None and pc is not None:
+                    lp, pc = float(lp), float(pc)
+                    if math.isfinite(lp) and math.isfinite(pc) and pc != 0:
+                        close, prev = lp, pc
+
+            if close is not None and prev is not None and prev != 0:
                 pct = (close - prev) / prev * 100
-                results.append({"name": name, "price": f"{close:,.2f}", "pct": pct})
+                if math.isfinite(pct):
+                    results.append({"name": name, "price": f"{close:,.2f}", "pct": pct})
+                    continue
+            print(f"[行情] {name}({symbol}) 未获取到有效数值")
         except Exception as e:
             print(f"[行情] {name}({symbol}) 获取失败: {e}")
     return results
 
 
 def get_a_market():
-    """获取 A 股核心指数（优先东方财富，海外偶发超时自动切换 Yahoo Finance 兜底）"""
+    """获取 A 股核心指数（优先东方财富，异常自动切换 Yahoo Finance 兜底）"""
     targets = ["上证指数", "深证成指", "创业板指", "沪深300"]
     results = []
     try:
@@ -70,7 +120,8 @@ def get_a_market():
             if not row.empty:
                 price = float(row["最新价"].values[0])
                 pct = float(row["涨跌幅"].values[0])
-                results.append({"name": name, "price": f"{price:,.2f}", "pct": pct})
+                if math.isfinite(price) and math.isfinite(pct):
+                    results.append({"name": name, "price": f"{price:,.2f}", "pct": pct})
     except Exception as e:
         print(f"[行情] 东方财富接口异常，切换备用源: {e}")
 
@@ -85,46 +136,58 @@ def get_a_market():
     return results
 
 
-def fetch_rss_within_24h(rss_dict, max_per_feed=8):
-    """抓取 RSS 并严格过滤 24 小时内的新闻，附带北京时间"""
+def fetch_rss_within_24h(rss_dict, max_per_feed=6):
+    """抓取 RSS（支持备用源自动切换）、过滤 24 小时内新闻并按最新时间倒序排列"""
     now_utc = datetime.datetime.now(datetime.timezone.utc)
     cutoff = now_utc - datetime.timedelta(hours=24)
-    items = []
+    all_lines = []
 
-    for source_name, url in rss_dict.items():
-        try:
-            resp = requests.get(url, headers=HEADERS, timeout=12)
-            resp.raise_for_status()
-            feed = feedparser.parse(resp.content)
-            count = 0
-            for entry in feed.entries:
-                if count >= max_per_feed:
-                    break
-                time_struct = entry.get("published_parsed") or entry.get("updated_parsed")
-                pub_str = "24h内"
-                if time_struct:
-                    pub_dt = datetime.datetime.fromtimestamp(
-                        calendar.timegm(time_struct), tz=datetime.timezone.utc
-                    )
-                    if pub_dt < cutoff:
-                        continue
-                    pub_str = pub_dt.astimezone(BJ_TZ).strftime("%m-%d %H:%M")
+    for source_name, urls in rss_dict.items():
+        if isinstance(urls, str):
+            urls = [urls]
 
-                title = clean_html(entry.get("title", ""))
-                summary = clean_html(entry.get("summary", entry.get("description", "")))[:240]
-                link = entry.get("link", "").strip()
-                if title:
-                    items.append(
-                        f"[{source_name} | {pub_str}] 标题:{title} | 摘要:{summary} | 链接:{link}"
-                    )
-                    count += 1
-        except Exception as e:
-            print(f"[RSS] {source_name} 抓取失败: {e}")
-    return "\n".join(items)
+        parsed_items = []
+        for url in urls:
+            try:
+                resp = requests.get(url, headers=HEADERS, timeout=12)
+                resp.raise_for_status()
+                feed = feedparser.parse(resp.content)
+                for entry in feed.entries:
+                    time_struct = entry.get("published_parsed") or entry.get("updated_parsed")
+                    if time_struct:
+                        pub_dt = datetime.datetime.fromtimestamp(
+                            calendar.timegm(time_struct), tz=datetime.timezone.utc
+                        )
+                        if pub_dt < cutoff:
+                            continue
+                        pub_str = pub_dt.astimezone(BJ_TZ).strftime("%m-%d %H:%M")
+                    else:
+                        pub_dt = now_utc - datetime.timedelta(hours=12)
+                        pub_str = "24h内"
+
+                    title = clean_html(entry.get("title", ""))
+                    summary = clean_html(entry.get("summary", entry.get("description", "")))[:240]
+                    link = entry.get("link", "").strip()
+                    if title:
+                        parsed_items.append((pub_dt, pub_str, title, summary, link))
+
+                if parsed_items:
+                    break  # 主源成功即跳过备用源
+            except Exception as e:
+                print(f"[RSS] {source_name} ({url[:45]}...) 抓取失败: {e}")
+
+        # 按发布时间从新到旧排序，取最新 max_per_feed 条
+        parsed_items.sort(key=lambda x: x[0], reverse=True)
+        for _, pub_str, title, summary, link in parsed_items[:max_per_feed]:
+            all_lines.append(
+                f"[{source_name} | {pub_str}] 标题:{title} | 摘要:{summary} | 链接:{link}"
+            )
+
+    return "\n".join(all_lines)
 
 
 def fetch_cls_telegraph(limit=50):
-    """抓取财联社 7x24 实时电报（拉取 50 条覆盖隔夜至早盘）"""
+    """抓取财联社 7x24 实时电报"""
     lines = []
     try:
         df_cls = ak.stock_info_global_cls()
@@ -146,7 +209,7 @@ def analyze_with_llm(global_fin_raw, cn_fin_raw, general_raw):
     now_str = datetime.datetime.now(BJ_TZ).strftime("%Y-%m-%d %H:%M")
 
     prompt = f"""你是一位华尔街见闻与彭博风格的资深财经总编。当前北京时间：{now_str}。
-请基于以下过去 24 小时内的权威一手信源，去重合并同类事件，将英文信源自然精准地翻译为专业中文，生成一份高密度、高价值的每日早报。
+请基于以下过去 24 小时内的顶级权威信源（彭博社、金融时报、路透社、WSJ、CNBC、财联社、BBC），去重合并同类事件，将英文报道精准翻译为专业中文，生成一份高密度、高价值的每日早报。
 
 严格按以下 JSON 格式输出（不要输出任何 Markdown 代码块标记或多余说明）：
 {{
@@ -159,7 +222,7 @@ def analyze_with_llm(global_fin_raw, cn_fin_raw, general_raw):
       "title": "高信息量中文标题（24字以内）",
       "fact": "核心事实与具体数据（60-90字，保留关键金额、百分比、公司与人物）",
       "impact": "市场逻辑与关联资产/板块影响（30-45字）",
-      "source": "来源与时间（如 WSJ市场 · 06:30）",
+      "source": "来源与时间（如 彭博市场 · 06:30）",
       "link": "提取对应的原始链接，没有则留空"
     }}
   ],
@@ -178,17 +241,17 @@ def analyze_with_llm(global_fin_raw, cn_fin_raw, general_raw):
       "tag": "国际/AI科技/商业/地缘",
       "title": "高信息量中文标题（24字以内）",
       "summary": "完整的事件脉络与核心看点（60-90字，不要只复述标题）",
-      "source": "来源与时间（如 BBC中文 · 05:20）",
+      "source": "来源与时间（如 彭博科技 · 05:20）",
       "link": "提取对应的原始链接，没有则留空"
     }}
   ]
 }}
 
 严格要求：
-1. us_global_news 精选 5 条最重要的美股与全球财经新闻；cn_a_news 精选 4 条最具影响力的国内宏观/A股产业新闻；general_news 精选 4 条高价值国际时政或前沿科技新闻。
+1. us_global_news 精选 5 条最重要的美股与全球财经新闻（优先采用彭博、路透、FT、WSJ 报道）；cn_a_news 精选 4 条最具影响力的国内宏观/A股产业新闻；general_news 精选 4 条高价值国际时政或前沿科技新闻。
 2. 严禁编造数据或链接，所有事实必须来自下方原始素材。
 
-【全球与美股一手财经信源】：
+【全球与美股顶级财经信源】：
 {global_fin_raw if global_fin_raw else "（暂无数据，请从国内电报中提取海外财经要闻补充）"}
 
 【国内财联社 7x24 实时电报】：
@@ -242,10 +305,7 @@ def build_news_block(items, with_impact=True):
             s_color = "red" if s == "利好" else ("green" if s == "利空" else "grey")
             sentiment_md = f" <font color='{s_color}'>[{s}]</font>"
 
-        meta_parts = []
-        if source:
-            meta_parts.append(source)
-        meta_str = f"<font color='grey'>{' | '.join(meta_parts)}</font>" if meta_parts else ""
+        meta_str = f"<font color='grey'>{source}</font>" if source else ""
         link_md = f" · [阅读原文 ↗]({link})" if link.startswith("http") else ""
 
         if with_impact:
@@ -279,7 +339,6 @@ def build_feishu_card(us_idx, tech_stocks, a_idx, macro_assets, llm_data):
     header_color, mood_label = mood_map.get(llm_data.get("mood", "neutral"), ("blue", "📊 每日早报"))
 
     elements = [
-        # 第一行行情：美股大盘 + 焦点科技
         {
             "tag": "column_set",
             "flex_mode": "bisect",
@@ -303,7 +362,6 @@ def build_feishu_card(us_idx, tech_stocks, a_idx, macro_assets, llm_data):
                 },
             ],
         },
-        # 第二行行情：A股核心 + 大宗加密汇率
         {
             "tag": "column_set",
             "flex_mode": "bisect",
@@ -328,37 +386,32 @@ def build_feishu_card(us_idx, tech_stocks, a_idx, macro_assets, llm_data):
             ],
         },
         {"tag": "hr"},
-        # 市场全景总览
         {
             "tag": "markdown",
             "content": f"🧭 **今日全景总览**  ·  {mood_label}\n\n{llm_data.get('overview', '')}",
         },
         {"tag": "hr"},
-        # 板块 1：美股与全球财经
         {
             "tag": "markdown",
             "content": f"🇺🇸 **美股与全球财经**\n\n{build_news_block(llm_data.get('us_global_news', []), with_impact=True)}",
         },
         {"tag": "hr"},
-        # 板块 2：A股与国内宏观
         {
             "tag": "markdown",
             "content": f"🇨🇳 **A 股与国内宏观**\n\n{build_news_block(llm_data.get('cn_a_news', []), with_impact=True)}",
         },
         {"tag": "hr"},
-        # 板块 3：国际时政与前沿科技
         {
             "tag": "markdown",
             "content": f"🌐 **国际时政与前沿科技**\n\n{build_news_block(llm_data.get('general_news', []), with_impact=False)}",
         },
         {"tag": "hr"},
-        # 底部注脚
         {
             "tag": "note",
             "elements": [
                 {
                     "tag": "plain_text",
-                    "content": f"信源：WSJ / CNBC / Yahoo Finance / 财联社 / BBC / TechCrunch（严格24h过滤） | 推送时间：{now.strftime('%H:%M')}",
+                    "content": f"信源：Bloomberg / FT / Reuters / WSJ / CNBC / 财联社 / BBC（24h过滤） | 推送时间：{now.strftime('%H:%M')}",
                 }
             ],
         },
@@ -387,9 +440,9 @@ def main():
     macro_assets = fetch_yf_group({"黄金": "GC=F", "WTI原油": "CL=F", "BTC": "BTC-USD", "离岸RMB": "CNH=X"})
     a_idx = get_a_market()
 
-    print("2/4 正在抓取过去 24 小时权威信源...")
-    global_fin_raw = fetch_rss_within_24h(GLOBAL_FINANCE_RSS, max_per_feed=8)
-    general_raw = fetch_rss_within_24h(GENERAL_NEWS_RSS, max_per_feed=6)
+    print("2/4 正在抓取过去 24 小时机构级信源...")
+    global_fin_raw = fetch_rss_within_24h(GLOBAL_FINANCE_RSS, max_per_feed=6)
+    general_raw = fetch_rss_within_24h(GENERAL_NEWS_RSS, max_per_feed=5)
     cn_fin_raw = fetch_cls_telegraph(limit=50)
 
     print("3/4 正在调用大模型精译与整合...")
