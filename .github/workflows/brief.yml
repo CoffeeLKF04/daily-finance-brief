@@ -1,13 +1,6 @@
 name: Daily Finance Brief
 
 on:
-  schedule:
-    # 北京时间 08:30（UTC 00:30）-> 早报
-    - cron: '30 0 * * *'
-    # 北京时间 15:30（UTC 07:30）-> A股收盘报
-    - cron: '30 7 * * *'
-    # 北京时间 22:00（UTC 14:00）-> 美股晚报
-    - cron: '0 14 * * *'
   workflow_dispatch:
     inputs:
       edition:
