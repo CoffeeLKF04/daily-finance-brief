@@ -52,4 +52,4 @@ def get_a_market():
             row = df[df["名称"] == name]
             if not row.empty:
                 price = float(row["最新价"].values[0])
-                pct = float(row["涨跌幅"].
+          pct = float(row["涨跌幅"].values[0])
