@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark" data-edition="pm">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DAILY BRIEF · 全球财经与美股晚报 · 2026-11-25</title>
+  <style>
+    :root {
+      --bg: #070b14;
+      --bg-glow-1: rgba(56, 189, 248, 0.11);
+      --bg-glow-2: rgba(99, 102, 241, 0.09);
+      --bg-elevated: #0f172a;
+      --bg-card: rgba(17, 25, 42, 0.86);
+      --bg-card-hover: rgba(23, 34, 56, 0.96);
+      --bg-subtle: rgba(255, 255, 255, 0.035);
+      --border: rgba(148, 163, 184, 0.13);
+      --border-strong: rgba(148, 163, 184, 0.28);
+      --text: #f1f5f9;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+      --accent: #38bdf8;
+      --accent-soft: rgba(56, 189, 248, 0.12);
+      --edition-bg: rgba(56, 189, 248, 0.14);
+      --edition-color: #7dd3fc;
+      --green: #10b981;
+      --green-bg: rgba(16, 185, 129, 0.14);
+      --red: #f43f5e;
+      --red-bg: rgba(244, 63, 94, 0.14);
+      --amber: #f59e0b;
+      --amber-bg: rgba(245, 158, 11, 0.14);
+      --breaking-border: rgba(245, 158, 11, 0.45);
+      --breaking-glow: 0 12px 34px -14px rgba(245, 158, 11, 0.24);
+      --shadow: 0 12px 30px -14px rgba(0, 0, 0, 0.65);
+      --font-sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI", sans-serif;
+      --font-serif: "Songti SC", "STSong", "Noto Serif CJK SC", "Source Han Serif SC", Georgia, serif;
+      --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    }
+
+    [data-edition="close"] {
+      --bg-glow-1: rgba(245, 158, 11, 0.13);
+      --bg-glow-2: rgba(244, 63, 94, 0.08);
+      --accent: #f59e0b;
+      --accent-soft: rgba(245, 158, 11, 0.14);
+      --edition-bg: rgba(245, 158, 11, 0.16);
+      --edition-color: #fcd34d;
+    }
+
+    [data-edition="pm"] {
+      --bg-glow-1: rgba(139, 92, 246, 0.13);
+      --bg-glow-2: rgba(56, 189, 248, 0.09);
+      --accent: #818cf8;
+      --accent-soft: rgba(129, 140, 248, 0.14);
+      --edition-bg: rgba(139, 92, 246, 0.16);
+      --edition-color: #c4b5fd;
+    }
+
+    [data-theme="light"] {
+      --bg: #f4f6f9;
+      --bg-glow-1: rgba(2, 132, 199, 0.07);
+      --bg-glow-2: rgba(99, 102, 241, 0.05);
+      --bg-elevated: #ffffff;
+      --bg-card: #ffffff;
+      --bg-card-hover: #ffffff;
+      --bg-subtle: #f8fafc;
+      --border: rgba(15, 23, 42, 0.08);
+      --border-strong: rgba(15, 23, 42, 0.18);
+      --text: #0f172a;
+      --text-secondary: #475569;
+      --text-muted: #64748b;
+      --accent: #0284c7;
+      --accent-soft: rgba(2, 132, 199, 0.1);
+      --edition-bg: rgba(2, 132, 199, 0.11);
+      --edition-color: #0369a1;
+      --green: #059669;
+      --green-bg: rgba(5, 150, 105, 0.1);
+      --red: #e11d48;
+      --red-bg: rgba(225, 29, 72, 0.1);
+      --amber: #d97706;
+      --amber-bg: rgba(217, 119, 6, 0.12);
+      --breaking-border: rgba(217, 119, 6, 0.48);
+      --breaking-glow: 0 10px 26px -12px rgba(217, 119, 6, 0.18);
+      --shadow: 0 6px 22px -10px rgba(15, 23, 42, 0.08);
+    }
+
+    [data-theme="light"][data-edition="close"] {
+      --accent: #d97706;
+      --accent-soft: rgba(217, 119, 6, 0.11);
+      --edition-bg: rgba(217, 119, 6, 0.12);
+      --edition-color: #b45309;
+    }
+
+    [data-theme="light"][data-edition="pm"] {
+      --accent: #4f46e5;
+      --accent-soft: rgba(79, 70, 229, 0.1);
+      --edition-bg: rgba(79, 70, 229, 0.12);
+      --edition-color: #4338ca;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: var(--font-sans);
+      background-color: var(--bg);
+      background-image:
+        radial-gradient(900px 420px at 15% -6%, var(--bg-glow-1), transparent 60%),
+        radial-gradient(760px 380px at 88% 2%, var(--bg-glow-2), transparent 55%);
+      background-attachment: fixed;
+      color: var(--text);
+      line-height: 1.65;
+      -webkit-font-smoothing: antialiased;
+      padding-bottom: 80px;
+    }
+
+    .read-progress {
+      position: fixed;
+      top: 0;
+      left: 0;
+      height: 2.5px;
+      width: 0%;
+      background: linear-gradient(90deg, var(--accent), #818cf8, var(--amber));
+      z-index: 100;
+      transition: width 0.08s linear;
+    }
+
+    .ticker-tape {
+      background: var(--bg-elevated);
+      border-bottom: 1px solid var(--border);
+      overflow: hidden;
+      white-space: nowrap;
+      height: 34px;
+      display: flex;
+      align-items: center;
+      font-family: var(--font-mono);
+      font-size: 12px;
+    }
+    .ticker-track {
+      display: inline-flex;
+      align-items: center;
+      animation: marquee 42s linear infinite;
+    }
+    .ticker-tape:hover .ticker-track { animation-play-state: paused; }
+    @keyframes marquee {
+      0% { transform: translateX(0); }
+      100% { transform: translateX(-50%); }
+    }
+    .tape-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 0 18px;
+      border-right: 1px solid var(--border);
+    }
+    .tape-name { color: var(--text-secondary); font-family: var(--font-sans); font-weight: 600; }
+    .tape-price { color: var(--text); font-weight: 600; }
+    .tape-green { color: var(--green); font-weight: 700; }
+    .tape-red { color: var(--red); font-weight: 700; }
+    .tape-flat { color: var(--text-muted); }
+
+    .container { max-width: 1040px; margin: 0 auto; padding: 0 22px; }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 60;
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      background: color-mix(in srgb, var(--bg) 80%, transparent);
+      border-bottom: 1px solid var(--border);
+    }
+    .topbar-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 58px;
+      gap: 12px;
+    }
+    .brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--text); }
+    .brand-mark {
+      width: 26px;
+      height: 26px;
+      border-radius: 7px;
+      background: linear-gradient(135deg, var(--accent), #6366f1);
+      display: grid;
+      place-items: center;
+      font-family: var(--font-mono);
+      font-weight: 800;
+      font-size: 13px;
+      color: #fff;
+      box-shadow: 0 4px 12px rgba(56, 189, 248, 0.28);
+    }
+    .brand-title { font-weight: 800; font-size: 15px; letter-spacing: 0.6px; }
+    .brand-sub { font-size: 12px; color: var(--text-muted); padding-left: 8px; border-left: 1px solid var(--border); }
+    .controls { display: flex; align-items: center; gap: 8px; }
+    .archive-select, .theme-btn {
+      background: var(--bg-elevated);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      padding: 6px 11px;
+      font-size: 12.5px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.18s;
+    }
+    .archive-select:hover, .theme-btn:hover { border-color: var(--border-strong); background: var(--bg-card-hover); }
+
+    .hero { padding: 34px 0 24px; border-bottom: 1px solid var(--border); margin-bottom: 24px; }
+    .hero-top {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .hero-meta-left { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+    .edition-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      background: var(--edition-bg);
+      color: var(--edition-color);
+    }
+    .hero-date {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: var(--text-secondary);
+      font-family: var(--font-mono);
+    }
+    .live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.18); }
+    .mood-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .mood-bullish { background: var(--red-bg); color: var(--red); border: 1px solid rgba(244, 63, 94, 0.25); }
+    .mood-bearish { background: var(--green-bg); color: var(--green); border: 1px solid rgba(16, 185, 129, 0.25); }
+    .mood-neutral { background: var(--accent-soft); color: var(--accent); border: 1px solid rgba(56, 189, 248, 0.25); }
+
+    .hero h1 {
+      font-family: var(--font-serif);
+      font-size: clamp(25px, 4.2vw, 36px);
+      font-weight: 800;
+      letter-spacing: -0.3px;
+      line-height: 1.32;
+      margin-bottom: 18px;
+    }
+
+    .quick-nav { display: flex; flex-wrap: wrap; gap: 8px; }
+    .quick-nav a {
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      padding: 6px 14px;
+      border-radius: 999px;
+      transition: all 0.18s;
+    }
+    .quick-nav a:hover { color: var(--accent); border-color: var(--accent); transform: translateY(-1px); }
+
+    .market-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+      scroll-margin-top: 76px;
+    }
+    .market-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 16px 20px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(8px);
+    }
+    .market-card-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-secondary);
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .market-card-sub { font-size: 11px; font-weight: 500; color: var(--text-muted); background: var(--bg-subtle); padding: 2px 7px; border-radius: 5px; }
+    .market-row {
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 0;
+      border-bottom: 1px dashed var(--border);
+    }
+    .market-row:last-child { border-bottom: none; padding-bottom: 0; }
+    .ticker-left { display: flex; flex-direction: column; min-width: 0; }
+    .ticker-name { font-size: 14px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .ticker-sym { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-muted); }
+    .ticker-mid { display: flex; align-items: center; justify-content: center; }
+    .sparkline { display: block; overflow: visible; }
+    .ticker-right { display: flex; align-items: center; justify-content: flex-end; gap: 9px; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+    .ticker-price { font-size: 14px; font-weight: 700; color: var(--text); }
+    .pct-badge { min-width: 72px; text-align: right; font-size: 12px; font-weight: 700; padding: 3px 8px; border-radius: 7px; }
+    .pct-green { color: var(--green); background: var(--green-bg); }
+    .pct-red { color: var(--red); background: var(--red-bg); }
+    .pct-flat { color: var(--text-secondary); background: var(--bg-subtle); }
+
+    .overview-box {
+      background: linear-gradient(145deg, var(--bg-card) 0%, var(--bg-elevated) 100%);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 22px 24px;
+      margin-bottom: 26px;
+      box-shadow: var(--shadow);
+      position: relative;
+      overflow: hidden;
+    }
+    .overview-box::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 4px;
+      background: linear-gradient(180deg, var(--accent), #818cf8);
+    }
+    .overview-label { font-size: 13px; font-weight: 800; color: var(--accent); letter-spacing: 0.6px; margin-bottom: 10px; }
+    .overview-text { font-size: 15.5px; color: var(--text); line-height: 1.85; }
+
+    .spotlight-wrap { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border); }
+    .spotlight-header { font-size: 12px; font-weight: 700; color: var(--amber); letter-spacing: 0.4px; margin-bottom: 10px; }
+    .spotlight-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    .spotlight-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 11px;
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      text-decoration: none;
+      color: var(--text);
+      font-size: 13px;
+      transition: all 0.16s;
+      min-width: 0;
+    }
+    .spotlight-item:hover { border-color: var(--amber); background: var(--amber-bg); transform: translateX(2px); }
+    .spotlight-badge { font-family: var(--font-mono); font-size: 11px; font-weight: 700; color: var(--amber); white-space: nowrap; }
+    .spotlight-sec { font-size: 11px; color: var(--text-muted); white-space: nowrap; }
+    .spotlight-title { flex: 1; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .spotlight-arrow { color: var(--text-muted); font-size: 12px; }
+
+    .filter-bar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 24px;
+      padding: 12px 14px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      box-shadow: var(--shadow);
+    }
+    .filter-pills { display: flex; flex-wrap: wrap; gap: 6px; }
+    .filter-btn {
+      background: var(--bg-subtle);
+      color: var(--text-secondary);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 5px 13px;
+      font-size: 12.5px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.16s;
+    }
+    .filter-btn:hover { color: var(--text); border-color: var(--border-strong); }
+    .filter-btn.active { background: var(--accent); color: #ffffff; border-color: var(--accent); }
+    .search-box { position: relative; flex: 0 1 240px; min-width: 180px; }
+    .search-input {
+      width: 100%;
+      background: var(--bg-elevated);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 6px 14px 6px 32px;
+      font-size: 12.5px;
+      outline: none;
+    }
+    .search-input:focus { border-color: var(--accent); }
+    .search-icon { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); font-size: 12px; color: var(--text-muted); pointer-events: none; }
+
+    .section { margin-bottom: 38px; scroll-margin-top: 76px; }
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--border);
+    }
+    .section-title { font-family: var(--font-serif); font-size: 20px; font-weight: 800; display: flex; align-items: center; gap: 9px; }
+    .section-count { font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); background: var(--bg-elevated); border: 1px solid var(--border); padding: 3px 10px; border-radius: 999px; }
+
+    .news-list { display: grid; gap: 15px; }
+    .news-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px 22px;
+      transition: transform 0.2s ease, border-color 0.2s ease;
+      box-shadow: var(--shadow);
+      scroll-margin-top: 84px;
+    }
+    .news-card:hover { transform: translateY(-2px); border-color: var(--border-strong); background: var(--bg-card-hover); }
+    .news-card.is-breaking {
+      border-color: var(--breaking-border);
+      box-shadow: var(--breaking-glow);
+      background: linear-gradient(180deg, color-mix(in srgb, var(--amber) 5%, var(--bg-card)) 0%, var(--bg-card) 45%);
+    }
+    .news-card.is-hidden { display: none; }
+
+    .news-top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 10px; }
+    .news-idx { font-family: var(--font-mono); font-size: 12px; font-weight: 700; color: var(--text-muted); }
+    .breaking-pill { font-size: 11.5px; font-weight: 800; padding: 2px 9px; border-radius: 6px; background: var(--amber-bg); color: var(--amber); border: 1px solid rgba(245, 158, 11, 0.32); }
+    .score-pill { font-size: 11.5px; letter-spacing: 1px; padding: 2px 7px; border-radius: 6px; background: var(--bg-subtle); border: 1px solid var(--border); }
+    .stars-on { color: var(--amber); }
+    .stars-off { color: var(--text-muted); opacity: 0.45; }
+    .tag-pill { font-size: 11.5px; font-weight: 600; padding: 2px 9px; border-radius: 6px; background: var(--accent-soft); color: var(--accent); }
+    .sent-pill { font-size: 11.5px; font-weight: 700; padding: 2px 9px; border-radius: 6px; }
+    .sent-bull { background: var(--red-bg); color: var(--red); }
+    .sent-bear { background: var(--green-bg); color: var(--green); }
+    .sent-neu { background: var(--bg-subtle); color: var(--text-secondary); }
+
+    .news-title { font-size: 17.5px; font-weight: 700; line-height: 1.45; margin-bottom: 9px; color: var(--text); }
+    .news-fact { font-size: 14.8px; color: var(--text-secondary); line-height: 1.8; margin-bottom: 12px; }
+    .news-impact {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      background: var(--bg-subtle);
+      border-left: 3px solid var(--accent);
+      border-radius: 0 10px 10px 0;
+      padding: 9px 13px;
+      font-size: 13.5px;
+      color: var(--text);
+      margin-bottom: 13px;
+      line-height: 1.65;
+    }
+    .impact-label { font-size: 11.5px; font-weight: 800; color: var(--accent); background: var(--accent-soft); padding: 1px 7px; border-radius: 5px; white-space: nowrap; }
+    .news-footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 12.5px; color: var(--text-muted); padding-top: 10px; border-top: 1px solid var(--border); }
+    .source-meta { font-family: var(--font-mono); font-size: 12px; }
+    .source-link { color: var(--accent); text-decoration: none; font-weight: 600; padding: 3px 10px; border-radius: 999px; background: var(--accent-soft); transition: all 0.16s; }
+    .source-link:hover { background: var(--accent); color: #fff; }
+    .source-nolink { font-size: 11.5px; opacity: 0.65; }
+
+    .empty-hint { display: none; text-align: center; padding: 28px 16px; color: var(--text-muted); font-size: 13.5px; border: 1px dashed var(--border); border-radius: 14px; }
+    .empty-hint.show { display: block; }
+
+    .back-top {
+      position: fixed;
+      right: 22px;
+      bottom: 24px;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      border: 1px solid var(--border-strong);
+      background: var(--bg-elevated);
+      color: var(--text);
+      font-size: 16px;
+      cursor: pointer;
+      box-shadow: var(--shadow);
+      opacity: 0;
+      pointer-events: none;
+      transition: all 0.2s;
+      z-index: 70;
+    }
+    .back-top.visible { opacity: 1; pointer-events: auto; }
+    .back-top:hover { border-color: var(--accent); color: var(--accent); transform: translateY(-2px); }
+
+    footer { text-align: center; font-size: 12.5px; color: var(--text-muted); padding-top: 28px; border-top: 1px solid var(--border); line-height: 1.9; }
+
+    @media (max-width: 760px) {
+      .market-grid { grid-template-columns: 1fr; }
+      .spotlight-list { grid-template-columns: 1fr; }
+      .hero { padding: 24px 0 18px; }
+      .news-card { padding: 16px; }
+      .overview-box { padding: 18px; }
+      .brand-sub { display: none; }
+      .search-box { flex: 1 1 100%; }
+      .ticker-mid { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="read-progress" id="readProgress"></div>
+  <div class="ticker-tape"><div class="ticker-track"><span class="tape-item">  <span class="tape-name">纳斯达克</span>  <span class="tape-price">23,733.54</span>  <span class="tape-pct tape-red">-1.48%</span></span><span class="tape-item">  <span class="tape-name">标普500</span>  <span class="tape-price">7,201.09</span>  <span class="tape-pct tape-red">-0.50%</span></span><span class="tape-item">  <span class="tape-name">道琼斯</span>  <span class="tape-price">50,018.70</span>  <span class="tape-pct tape-green">+0.85%</span></span><span class="tape-item">  <span class="tape-name">费城半导体</span>  <span class="tape-price">8,832.50</span>  <span class="tape-pct tape-red">-7.88%</span></span><span class="tape-item">  <span class="tape-name">英伟达</span>  <span class="tape-price">155.38</span>  <span class="tape-pct tape-red">-5.86%</span></span><span class="tape-item">  <span class="tape-name">苹果</span>  <span class="tape-price">354.07</span>  <span class="tape-pct tape-green">+1.43%</span></span><span class="tape-item">  <span class="tape-name">微软</span>  <span class="tape-price">496.13</span>  <span class="tape-pct tape-green">+0.74%</span></span><span class="tape-item">  <span class="tape-name">特斯拉</span>  <span class="tape-price">384.68</span>  <span class="tape-pct tape-red">-0.20%</span></span><span class="tape-item">  <span class="tape-name">黄金</span>  <span class="tape-price">3,513.60</span>  <span class="tape-pct tape-red">-1.36%</span></span><span class="tape-item">  <span class="tape-name">WTI原油</span>  <span class="tape-price">82.59</span>  <span class="tape-pct tape-green">+0.66%</span></span><span class="tape-item">  <span class="tape-name">BTC</span>  <span class="tape-price">58,029.83</span>  <span class="tape-pct tape-red">-2.88%</span></span><span class="tape-item">  <span class="tape-name">离岸RMB</span>  <span class="tape-price">6.67</span>  <span class="tape-pct tape-green">+0.12%</span></span><span class="tape-item">  <span class="tape-name">上证指数</span>  <span class="tape-price">3,476.47</span>  <span class="tape-pct tape-green">-2.03%</span></span><span class="tape-item">  <span class="tape-name">深证成指</span>  <span class="tape-price">10,086.36</span>  <span class="tape-pct tape-green">-3.24%</span></span><span class="tape-item">  <span class="tape-name">创业板指</span>  <span class="tape-price">2,183.58</span>  <span class="tape-pct tape-green">-4.28%</span></span><span class="tape-item">  <span class="tape-name">沪深300</span>  <span class="tape-price">3,898.24</span>  <span class="tape-pct tape-green">-1.67%</span></span><span class="tape-item">  <span class="tape-name">纳斯达克</span>  <span class="tape-price">23,733.54</span>  <span class="tape-pct tape-red">-1.48%</span></span><span class="tape-item">  <span class="tape-name">标普500</span>  <span class="tape-price">7,201.09</span>  <span class="tape-pct tape-red">-0.50%</span></span><span class="tape-item">  <span class="tape-name">道琼斯</span>  <span class="tape-price">50,018.70</span>  <span class="tape-pct tape-green">+0.85%</span></span><span class="tape-item">  <span class="tape-name">费城半导体</span>  <span class="tape-price">8,832.50</span>  <span class="tape-pct tape-red">-7.88%</span></span><span class="tape-item">  <span class="tape-name">英伟达</span>  <span class="tape-price">155.38</span>  <span class="tape-pct tape-red">-5.86%</span></span><span class="tape-item">  <span class="tape-name">苹果</span>  <span class="tape-price">354.07</span>  <span class="tape-pct tape-green">+1.43%</span></span><span class="tape-item">  <span class="tape-name">微软</span>  <span class="tape-price">496.13</span>  <span class="tape-pct tape-green">+0.74%</span></span><span class="tape-item">  <span class="tape-name">特斯拉</span>  <span class="tape-price">384.68</span>  <span class="tape-pct tape-red">-0.20%</span></span><span class="tape-item">  <span class="tape-name">黄金</span>  <span class="tape-price">3,513.60</span>  <span class="tape-pct tape-red">-1.36%</span></span><span class="tape-item">  <span class="tape-name">WTI原油</span>  <span class="tape-price">82.59</span>  <span class="tape-pct tape-green">+0.66%</span></span><span class="tape-item">  <span class="tape-name">BTC</span>  <span class="tape-price">58,029.83</span>  <span class="tape-pct tape-red">-2.88%</span></span><span class="tape-item">  <span class="tape-name">离岸RMB</span>  <span class="tape-price">6.67</span>  <span class="tape-pct tape-green">+0.12%</span></span><span class="tape-item">  <span class="tape-name">上证指数</span>  <span class="tape-price">3,476.47</span>  <span class="tape-pct tape-green">-2.03%</span></span><span class="tape-item">  <span class="tape-name">深证成指</span>  <span class="tape-price">10,086.36</span>  <span class="tape-pct tape-green">-3.24%</span></span><span class="tape-item">  <span class="tape-name">创业板指</span>  <span class="tape-price">2,183.58</span>  <span class="tape-pct tape-green">-4.28%</span></span><span class="tape-item">  <span class="tape-name">沪深300</span>  <span class="tape-price">3,898.24</span>  <span class="tape-pct tape-green">-1.67%</span></span></div></div>
+
+  <header class="topbar">
+    <div class="container topbar-inner">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">DB</span>
+        <span class="brand-title">DAILY BRIEF</span>
+        <span class="brand-sub">早 · 收盘 · 晚 三推终端</span>
+      </a>
+      <div class="controls">
+        <select class="archive-select" aria-label="往期早中晚报" onchange="if(this.value) window.location.href=this.value"><option value="2026-11-25-pm.html" selected>2026-11-25 🌙晚报 (最新)</option><option value="2026-11-25-close.html">2026-11-25 🌇收盘</option><option value="2026-11-25.html">2026-11-25</option></select>
+        <button class="theme-btn" id="themeToggle" type="button" aria-label="切换主题">☀️ 浅色</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="hero">
+      <div class="hero-top">
+        <div class="hero-meta-left">
+          <span class="edition-pill">🌙 晚报版 · 欧盘动向与美股前瞻</span>
+          <span class="hero-date">
+            <span class="live-dot"></span>
+            <span>2026年11月25日 周三 · 21:58 CST</span>
+          </span>
+        </div>
+        <span class="mood-pill mood-bearish">❄️ 市场情绪偏谨慎</span>
+      </div>
+      <h1>美国通胀升温，英伟达领跌科技股</h1>
+      <nav class="quick-nav">
+        <a href="#markets">📊 跨市场行情</a><a href="#us-global">🇺🇸 美股盘前与宏观</a><a href="#cn-a">🇨🇳 国内盘后新增</a><a href="#general">🌐 国际时政与科技</a>
+      </nav>
+    </section>
+
+    <section id="markets" class="market-grid">
+      <div class="market-card">  <div class="market-card-title"><span>🇺🇸 美股最新 / 盘面</span><span class="market-card-sub">绿涨红跌 · 7日趋势</span></div>  <div class="market-row">  <div class="ticker-left">    <span class="ticker-name">纳斯达克</span>    <span class="ticker-sym">^IXIC</span>  </div>  <div class="ticker-mid"><svg class="sparkline" width="68" height="22" viewBox="0 0 68 22" fill="none" aria-hidden="true">  <defs>    <linearGradient id="sg-us-0" x1="0" y1="0" x2="0" y2="1">      <stop offset="0%" stop-color="#f43f5e" stop-opacity="0.32"/>      <stop offset="100%" stop-color="#f43f5e" stop-opacity="0"/>    </linearGradient>  </defs>  <polygon points="0,22 0.0,2.5 11.3,4.1 22.7,3.2 34.0,8.2 45.3,19.5 56.7,6.3 68.0,9.5 68,22" fill="url(#sg-us-0)"/>  <polyline points="0.0,2.5 11.3,4.1 22.7,3.2 34.0,8.2 45.3,19.5 56.7,6.3 68.0,9.5" stroke="#f43f5e" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>  <circle cx="68.0" cy="9.5" r="2.2" fill="#f43f5e"/></svg></div>  <div class="ticker-right">    <span class="ticker-price">23,733.54</span>    <span class="pct-badge pct-red">-1.48%</span>  </div></div><div class="market-row">  <div class="ticker-left">    <span class="ticker-name">标普500</span>    <span class="ticker-sym">^GSPC</span>  </div>  <div class="ticker-mid"><svg class="sparkline" width="68" height="22" viewBox="0 0 68 22" fill="none" aria-hidden="true">  <defs>    <linearGradient id="sg-us-1" x1="0" y1="0" x2="0" y2="1">      <stop offset="0%" stop-color="#f43f5e" stop-opacity="0.32"/>      <stop offset="100%" stop-color="#f43f5e" stop-opacity="0"/>    </linearGradient>  </defs>  <polygon points="0,22 0.0,2.5 11.3,5.1 22.7,5.6 34.0,10.6 45.3,19.5 56.7,8.5 68.0,9.7 68,22" fill="url(#sg-us-1)"/>  <polyline points="0.0,2.5 11.3,5.1 22.7,5.6 34.0,10.6 45.3,19.5 56.7,8.5 68.0,9.7" stroke="#f43f5e" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>  <circle cx="68.0" cy="9.7" r="2.2" fill="#f43f5e"/></svg></div>  <div class="ticker-right">    <span class="ticker-price">7,201.09</span>    <span class="pct-badge pct-red">-0.50%</span>  </div></div><div class="market-row">  <div class="ticker-left">    <span class="ticker-name">道琼斯</span>    <span class="ticker-sym">^DJI</span>  </div>  <div class="ticker-mid"><svg class="sparkline" width="68" height="22" viewBox="0 0 68 22" fill="none" aria-hidden="true">  <defs>    <linearGradient id="sg-us-2" x1="0" y1="0" x2="0" y2="1">      <stop offset="0%" stop-color="#10b981" stop-opacity="0.32"/>      <stop offset="100%" stop-color="#10b981" stop-opacity="0"/>    </linearGradient>  </defs>  <polygon points="0,22 0.0,2.5 11.3,6.7 22.7,9.4 34.0,14.8 45.3,19.5 56.7,12.4 68.0,10.3 68,22" fill="url(#sg-us-2)"/>  <polyline points="0.0,2.5 11.3,6.7 22.7,9.4 34.0,14.8 45.3,19.5 56.7,12.4 68.0,10.3" stroke="#10b981" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>  <circle cx="68.0" cy="10.3" r="2.2" fill="#10b981"/></svg></div>  <div class="ticker-right">    <span class="ticker-price">50,018.70</span>    <span class="pct-badge pct-green">+0.85%</span>  </div></div><div class="market-row">  <div class="ticker-left">    <span class="ticker-name">费城半导体</span>    <span class="ticker-sym">^SOX</span>  </div>  <div class="ticker-mid"><svg class="sparkline" width="68" height="22" viewBox="0 0 68 22" fill="none" aria-hidden="true">  <defs>    <linearGradient id="sg-us-3" x1="0" y1="0" x2="0" y2="1">      <stop offset="0%" stop-color="#f43f5e" stop-opacity="0.32"/>      <stop offset="100%" stop-color="#f43f5e" stop-opacity="0"/>    </linearGradient>  </defs>  <polygon points="0,22 0.0,3.1 11.3,2.6 22.7,2.5 34.0,5.7 45.3,19.5 56.7,3.4 68.0,13.7 68,22" fill="url(#sg-us-3)"/>  <polyline points="0.0,3.1 11.3,2.6 22.7,2.5 34.0,5.7 45.3,19.5 56.7,3.4 68.0,13.7" stroke="#f43f5e" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>  <circle cx="68.0" cy="13.7" r="2.2" fill="#f43f5e"/></svg></div>  <div class="ticker-right">    <span class="ticker-price">8,832.50</span>    <span class="pct-badge pct-red">-7.88%</span>  </div></div></div>
+<div class="market-card">  <div class="market-card-title"><span>🚀 美股科技风向</span><span class="market-card-sub">绿涨红跌 · 7日趋势</span></div>  <div class="market-row">  <div class="ticker-left">    <span class="ticker-name">英伟达</span>    <span class="ticker-sym">NVDA</span>  </div>  <div class="ticker-mid"><svg class="sparkline" width="68" height="22" viewBox="0 0 68 22" fill="none" aria-hidden="true">  <defs>    <linearGradient id="sg-tk-0" x1="0" y1="0" x2="0" y2="1">      <stop offset="0%" stop-color="#f43f5e" stop-opacity="0.32"/>      <stop offset="100%" stop-color="#f43f5e" stop-opacity="0"/>    </linearGradient>  </defs>  <polygon points="0,22 0.0,6.3 11.3,6.6 22.7,8.6 34.0,10.7 45.3,19.5 56.7,2.5 68.0,6.7 68,22" fill="url(#sg-tk-0)"/>  <polyline points="0.0,6.3 11.3,6.6 22.7,8.6 34.0,10.7 45.3,19.5 56.7,2.5 68.0,6.7" stroke="#f43f5e" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>  <circle cx="68.0" cy="6.7" r="2.2" fill="#f43f5e"/></svg></div>  <div class="ticker-right">    <span class="ticker-price">155.38</span>    <span class="pct-badge pct-red">-5.86%</span>  </div></div><div class="market-row">  <div class="ticker-left">    <span class="ticker-name">苹果</span>    <span class="ticker-sym">AAPL</span>  </div>  <div class="ticker-mid"><svg class="sparkline" width="68" height="22" viewBox="0 0 68 22" fill="none" aria-hidden="true">  <defs>    <linearGradient id="sg-tk-1" x1="0" y1="0" x2="0" y2="1">      <stop offset="0%" stop-color="#10b981" stop-opacity="0.32"/>      <stop offset="100%" stop-color="#10b981" stop-opacity="0"/>    </linearGradient>  </defs>  <polygon points="0,22 0.0,4.4 11.3,5.7 22.7,4.9 34.0,9.7 45.3,19.5 56.7,9.9 68.0,2.5 68,22" fill="url(#sg-tk-1)"/>  <polyline points="0.0,4.4 11.3,5.7 22.7,4.9 34.0,9.7 45.3,19.5 56.7,9.9 68.0,2.5" stroke="#10b981" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>  <circle cx="68.0" cy="2.5" r="2.2" fill="#10b981"/></svg></div>  <div class="ticker-right">    <span class="ticker-price">354.07</span>    <span class="pct-badge pct-green">+1.43%</span>  </div></div><div class="market-row">  <div class="ticker-left">    <span class="ticker-name">微软</span>    <span class="ticker-sym">MSFT</span>  </div>  <div class="ticker-mid"><svg class="sparkline" width="68" height="22" viewBox="0 0 68 22" fill="none" aria-hidden="true">  <defs>    <linearGradient id="sg-tk-2" x1="0" y1="0" x2="0" y2="1">      <stop offset="0%" stop-color="#10b981" stop-opacity="0.32"/>      <stop offset="100%" stop-color="#10b981" stop-opacity="0"/>    </linearGradient>  </defs>  <polygon points="0,22 0.0,2.5 11.3,8.6 22.7,7.6 34.0,12.3 45.3,19.5 56.7,15.3 68.0,13.4 68,22" fill="url(#sg-tk-2)"/>  <polyline points="0.0,2.5 11.3,8.6 22.7,7.6 34.0,12.3 45.3,19.5 56.7,15.3 68.0,13.4" stroke="#10b981" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>  <circle cx="68.0" cy="13.4" r="2.2" fill="#10b981"/></svg></div>  <div class="ticker-right">    <span class="ticker-price">496.13</span>    <span class="pct-badge pct-green">+0.74%</span>  </div></div><div class="market-row">  <div class="ticker-left">    <span class="ticker-name">特斯拉</span>    <span class="ticker-sym">TSLA</span>  </div>  <div class="ticker-mid"><svg class="sparkline" width="68" height="22" viewBox="0 0 68 22" fill="none" aria-hidden="true">  <defs>    <linearGradient id="sg-tk-3" x1="0" y1="0" x2="0" y2="1">      <stop offset="0%" stop-color="#f43f5e" stop-opacity="0.32"/>      <stop offset="100%" stop-color="#f43f5e" stop-opacity="0"/>    </linearGradient>  </defs>  <polygon points="0,22 0.0,5.0 11.3,4.8 22.7,3.2 34.0,7.2 45.3,19.5 56.7,2.5 68.0,2.8 68,22" fill="url(#sg-tk-3)"/>  <polyline points="0.0,5.0 11.3,4.8 22.7,3.2 34.0,7.2 45.3,19.5 56.7,2.5 68.0,2.8" stroke="#f43f5e" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>  <circle cx="68.0" cy="2.8" r="2.2" fill="#f43f5e"/></svg></div>  <div class="ticker-right">    <span class="ticker-price">384.68</span>    <span class="pct-badge pct-red">-0.20%</span>  </div></div></div>
+<div class="market-card">  <div class="market-card-title"><span>🌍 大宗 · 加密 · 汇率</span><span class="market-card-sub">绿涨红跌 · 7日趋势</span></div>  <div class="market-row">  <div class="ticker-left">    <span class="ticker-name">黄金</span>    <span class="ticker-sym">GC=F</span>  </div>  <div class="ticker-mid"><svg class="sparkline" width="68" height="22" viewBox="0 0 68 22" fill="none" aria-hidden="true">  <defs>    <linearGradient id="sg-mc-0" x1="0" y1="0" x2="0" y2="1">      <stop offset="0%" stop-color="#f43f5e" stop-opacity="0.32"/>      <stop offset="100%" stop-color="#f43f5e" stop-opacity="0"/>    </linearGradient>  </defs>  <polygon points="0,22 0.0,2.5 11.3,8.4 22.7,11.2 34.0,19.4 45.3,12.8 56.7,17.2 68.0,19.5 68,22" fill="url(#sg-mc-0)"/>  <polyline points="0.0,2.5 11.3,8.4 22.7,11.2 34.0,19.4 45.3,12.8 56.7,17.2 68.0,19.5" stroke="#f43f5e" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>  <circle cx="68.0" cy="19.5" r="2.2" fill="#f43f5e"/></svg></div>  <div class="ticker-right">    <span class="ticker-price">3,513.60</span>    <span class="pct-badge pct-red">-1.36%</span>  </div></div><div class="market-row">  <div class="ticker-left">    <span class="ticker-name">WTI原油</span>    <span class="ticker-sym">CL=F</span>  </div>  <div class="ticker-mid"><svg class="sparkline" width="68" height="22" viewBox="0 0 68 22" fill="none" aria-hidden="true">  <defs>    <linearGradient id="sg-mc-1" x1="0" y1="0" x2="0" y2="1">      <stop offset="0%" stop-color="#10b981" stop-opacity="0.32"/>      <stop offset="100%" stop-color="#10b981" stop-opacity="0"/>    </linearGradient>  </defs>  <polygon points="0,22 0.0,2.5 11.3,10.5 22.7,10.7 34.0,8.4 45.3,19.5 56.7,14.0 68.0,12.5 68,22" fill="url(#sg-mc-1)"/>  <polyline points="0.0,2.5 11.3,10.5 22.7,10.7 34.0,8.4 45.3,19.5 56.7,14.0 68.0,12.5" stroke="#10b981" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>  <circle cx="68.0" cy="12.5" r="2.2" fill="#10b981"/></svg></div>  <div class="ticker-right">    <span class="ticker-price">82.59</span>    <span class="pct-badge pct-green">+0.66%</span>  </div></div><div class="market-row">  <div class="ticker-left">    <span class="ticker-name">BTC</span>    <span class="ticker-sym">BTC-USD</span>  </div>  <div class="ticker-mid"><svg class="sparkline" width="68" height="22" viewBox="0 0 68 22" fill="none" aria-hidden="true">  <defs>    <linearGradient id="sg-mc-2" x1="0" y1="0" x2="0" y2="1">      <stop offset="0%" stop-color="#f43f5e" stop-opacity="0.32"/>      <stop offset="100%" stop-color="#f43f5e" stop-opacity="0"/>    </linearGradient>  </defs>  <polygon points="0,22 0.0,2.5 11.3,16.1 22.7,10.4 34.0,5.7 45.3,5.5 56.7,12.0 68.0,19.5 68,22" fill="url(#sg-mc-2)"/>  <polyline points="0.0,2.5 11.3,16.1 22.7,10.4 34.0,5.7 45.3,5.5 56.7,12.0 68.0,19.5" stroke="#f43f5e" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>  <circle cx="68.0" cy="19.5" r="2.2" fill="#f43f5e"/></svg></div>  <div class="ticker-right">    <span class="ticker-price">58,029.83</span>    <span class="pct-badge pct-red">-2.88%</span>  </div></div><div class="market-row">  <div class="ticker-left">    <span class="ticker-name">离岸RMB</span>    <span class="ticker-sym">CNH=X</span>  </div>  <div class="ticker-mid"></div>  <div class="ticker-right">    <span class="ticker-price">6.67</span>    <span class="pct-badge pct-green">+0.12%</span>  </div></div></div>
+<div class="market-card">  <div class="market-card-title"><span>🇨🇳 A 股今日收盘</span><span class="market-card-sub">红涨绿跌 · 7日趋势</span></div>  <div class="market-row">  <div class="ticker-left">    <span class="ticker-name">上证指数</span>    <span class="ticker-sym">000001.SS</span>  </div>  <div class="ticker-mid"><svg class="sparkline" width="68" height="22" viewBox="0 0 68 22" fill="none" aria-hidden="true">  <defs>    <linearGradient id="sg-cn-0" x1="0" y1="0" x2="0" y2="1">      <stop offset="0%" stop-color="#10b981" stop-opacity="0.32"/>      <stop offset="100%" stop-color="#10b981" stop-opacity="0"/>    </linearGradient>  </defs>  <polygon points="0,22 0.0,3.0 11.3,2.5 22.7,4.1 34.0,10.7 45.3,10.0 56.7,8.5 68.0,19.5 68,22" fill="url(#sg-cn-0)"/>  <polyline points="0.0,3.0 11.3,2.5 22.7,4.1 34.0,10.7 45.3,10.0 56.7,8.5 68.0,19.5" stroke="#10b981" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>  <circle cx="68.0" cy="19.5" r="2.2" fill="#10b981"/></svg></div>  <div class="ticker-right">    <span class="ticker-price">3,476.47</span>    <span class="pct-badge pct-green">-2.03%</span>  </div></div><div class="market-row">  <div class="ticker-left">    <span class="ticker-name">深证成指</span>    <span class="ticker-sym">399001.SZ</span>  </div>  <div class="ticker-mid"><svg class="sparkline" width="68" height="22" viewBox="0 0 68 22" fill="none" aria-hidden="true">  <defs>    <linearGradient id="sg-cn-1" x1="0" y1="0" x2="0" y2="1">      <stop offset="0%" stop-color="#10b981" stop-opacity="0.32"/>      <stop offset="100%" stop-color="#10b981" stop-opacity="0"/>    </linearGradient>  </defs>  <polygon points="0,22 0.0,3.1 11.3,2.5 22.7,4.8 34.0,14.5 45.3,8.6 56.7,9.5 68.0,19.5 68,22" fill="url(#sg-cn-1)"/>  <polyline points="0.0,3.1 11.3,2.5 22.7,4.8 34.0,14.5 45.3,8.6 56.7,9.5 68.0,19.5" stroke="#10b981" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>  <circle cx="68.0" cy="19.5" r="2.2" fill="#10b981"/></svg></div>  <div class="ticker-right">    <span class="ticker-price">10,086.36</span>    <span class="pct-badge pct-green">-3.24%</span>  </div></div><div class="market-row">  <div class="ticker-left">    <span class="ticker-name">创业板指</span>    <span class="ticker-sym">399006.SZ</span>  </div>  <div class="ticker-mid"></div>  <div class="ticker-right">    <span class="ticker-price">2,183.58</span>    <span class="pct-badge pct-green">-4.28%</span>  </div></div><div class="market-row">  <div class="ticker-left">    <span class="ticker-name">沪深300</span>    <span class="ticker-sym">000300.SS</span>  </div>  <div class="ticker-mid"></div>  <div class="ticker-right">    <span class="ticker-price">3,898.24</span>    <span class="pct-badge pct-green">-1.67%</span>  </div></div></div>
+    </section>
+
+    <section class="overview-box">
+      <div class="overview-label">🧭 晚间美股前瞻与跨市场总览</div>
+      <div class="overview-text">截至北京时间21:58，美国10月PCE通胀同比升至3.8%，消费支出停滞，12月加息预期升温。美股仍处盘前，纳指100期货晚间一度跌3%，英伟达领跌AI板块。美国拟对中国、欧盟等14个贸易伙伴加征关税，进一步压制风险偏好。欧洲方面，欧央行管委释放偏鹰信号，天然气供应缓冲偏薄，英国明年1月起居民能源价格上限将上调26%。素材缺少欧股指数、加密行情及国内盘后政策和公司公告。</div>
+      <div class="spotlight-wrap">  <div class="spotlight-header">⚡ 本期必读重磅速达（按重要性排序）</div>  <div class="spotlight-list"><a class="spotlight-item" href="#us-1">  <span class="spotlight-badge">🔥 5★</span>  <span class="spotlight-sec">美股/全球</span>  <span class="spotlight-title">美国10月PCE通胀升至3.8%</span>  <span class="spotlight-arrow">↓</span></a><a class="spotlight-item" href="#us-2">  <span class="spotlight-badge">🔥 5★</span>  <span class="spotlight-sec">美股/全球</span>  <span class="spotlight-title">英伟达领跌AI股，纳指100期货一度跌3%</span>  <span class="spotlight-arrow">↓</span></a><a class="spotlight-item" href="#us-3">  <span class="spotlight-badge">🔥 5★</span>  <span class="spotlight-sec">美股/全球</span>  <span class="spotlight-title">美国拟对中国、欧盟等14个贸易伙伴加税</span>  <span class="spotlight-arrow">↓</span></a></div></div>
+    </section>
+
+    <div class="filter-bar">
+      <div class="filter-pills" role="group" aria-label="新闻筛选">
+        <button class="filter-btn active" type="button" data-filter="all">全部资讯</button>
+        <button class="filter-btn" type="button" data-filter="top">🔥 重磅 4-5★</button>
+        <button class="filter-btn" type="button" data-filter="bull">▲ 仅看利好</button>
+        <button class="filter-btn" type="button" data-filter="bear">▼ 仅看利空</button>
+      </div>
+      <div class="search-box">
+        <span class="search-icon">🔍</span>
+        <input class="search-input" id="searchInput" type="search" placeholder="搜索公司、板块或关键词..." />
+      </div>
+    </div>
+
+    <section id="us-global" class="section" data-section="us">  <div class="section-header">    <h2 class="section-title">🇺🇸 美股盘前/开盘与欧美宏观</h2>    <span class="section-count" data-count-for="us">6 条精选</span>  </div>  <div class="news-list"><article id="us-1" class="news-card is-breaking" data-score="5" data-sentiment="bear">  <div class="news-top">    <span class="news-idx">#01</span>    <span class="breaking-pill">🔥 重磅头条 · ★★★★★</span>    <span class="tag-pill">宏观</span>    <span class="sent-pill sent-bear">▼ 利空</span>  </div>  <h3 class="news-title">美国10月PCE通胀升至3.8%</h3>  <p class="news-fact">CNBC报道，美联储关注的美国个人消费支出价格指数10月同比上涨3.8%，通胀较此前加速，读数与道琼斯调查预期一致。彭博称，继此前强劲增长后，10月美国消费者支出陷入停滞。</p>  <div class="news-impact">  <span class="impact-label">深度逻辑</span>  <span>通胀加速强化12月加息预期，抬高成长股估值压力。消费支出停滞也削弱零售股的需求预期。</span></div>  <div class="news-footer">    <span class="source-meta">📰 路透商业 · 21:48 / CNBC财经 · 21:47 / 彭博宏观 · 21:33</span>    <a class="source-link" href="https://www.cnbc.com/2026/11/25/pce-inflation-report-october-2026.html" target="_blank" rel="noopener noreferrer">阅读原文 ↗</a>  </div></article>
+<article id="us-2" class="news-card is-breaking" data-score="5" data-sentiment="bear">  <div class="news-top">    <span class="news-idx">#02</span>    <span class="breaking-pill">🔥 重磅头条 · ★★★★★</span>    <span class="tag-pill">美股</span>    <span class="sent-pill sent-bear">▼ 利空</span>  </div>  <h3 class="news-title">英伟达领跌AI股，纳指100期货一度跌3%</h3>  <p class="news-fact">《金融时报》19:00报道，纳斯达克100指数期货下跌3%，延续持续数周的科技股抛售。CNBC在21:57的更新中称，英伟达领跌AI板块。彭博称，黄仁勋周一复任带来的乐观情绪正在消退。</p>  <div class="news-impact">  <span class="impact-label">深度逻辑</span>  <span>市场重新审视AI投入能否转化为利润。英伟达领跌加重半导体和算力链的估值调整压力。</span></div>  <div class="news-footer">    <span class="source-meta">📰 CNBC财经 · 21:57 / 彭博市场 · 20:20 / 金融时报 · 19:00</span>    <a class="source-link" href="https://www.cnbc.com/2026/11/24/stock-market-today-live-updates-.html" target="_blank" rel="noopener noreferrer">阅读原文 ↗</a>  </div></article>
+<article id="us-3" class="news-card is-breaking" data-score="5" data-sentiment="bear">  <div class="news-top">    <span class="news-idx">#03</span>    <span class="breaking-pill">🔥 重磅头条 · ★★★★★</span>    <span class="tag-pill">宏观</span>    <span class="sent-pill sent-bear">▼ 利空</span>  </div>  <h3 class="news-title">美国拟对中国、欧盟等14个贸易伙伴加税</h3>  <p class="news-fact">美国提出对14个贸易伙伴加征关税，覆盖中国和欧盟。路透称，提案瞄准制造业产能过剩，针对巴西的方案包括对飞机征收10%关税。彭博报道，中方将可能加税称为政治操弄。</p>  <div class="news-impact">  <span class="impact-label">深度逻辑</span>  <span>提案增加跨境供应链的成本不确定性，汽车、航空及工业品出口链的估值可能受到压制。</span></div>  <div class="news-footer">    <span class="source-meta">📰 路透商业 · 21:41、21:16 / CNBC财经 · 21:37 / 彭博市场 · 21:28</span>    <a class="source-link" href="https://www.cnbc.com/2026/11/25/us-tariffs-trump-section-301.html" target="_blank" rel="noopener noreferrer">阅读原文 ↗</a>  </div></article>
+<article id="us-4" class="news-card" data-score="4" data-sentiment="bear">  <div class="news-top">    <span class="news-idx">#04</span>    <span class="score-pill" title="重磅指数 4/5"><span class="stars-on">★★★★</span><span class="stars-off">☆</span></span>    <span class="tag-pill">宏观</span>    <span class="sent-pill sent-bear">▼ 利空</span>  </div>  <h3 class="news-title">欧央行管委科赫暗示支持进一步加息</h3>  <p class="news-fact">欧洲央行管委马丁·科赫警告，央行在利率决策上不能落后于通胀形势。彭博将这番表态解读为科赫倾向支持进一步加息。欧洲天然气市场同期也面临供应缓冲偏薄、天气预报反复等压力。</p>  <div class="news-impact">  <span class="impact-label">深度逻辑</span>  <span>偏鹰表态可能推高欧元区短端利率预期，压制地产等利率敏感板块，并为欧元提供支撑。</span></div>  <div class="news-footer">    <span class="source-meta">📰 彭博市场 · 21:24 / 彭博宏观 · 18:58</span>    <a class="source-link" href="https://www.bloomberg.com/news/articles/2026-11-25/ecb-can-t-fall-behind-curve-on-interest-rates-kocher-says" target="_blank" rel="noopener noreferrer">阅读原文 ↗</a>  </div></article>
+<article id="us-5" class="news-card" data-score="4" data-sentiment="bear">  <div class="news-top">    <span class="news-idx">#05</span>    <span class="score-pill" title="重磅指数 4/5"><span class="stars-on">★★★★</span><span class="stars-off">☆</span></span>    <span class="tag-pill">宏观</span>    <span class="sent-pill sent-bear">▼ 利空</span>  </div>  <h3 class="news-title">欧洲气市面临波动，英国能源限价将上调26%</h3>  <p class="news-fact">彭博称，欧洲天然气供应缓冲偏薄，天气预报变化和中东战事可能放大冬季价格波动。《金融时报》报道，受批发天然气成本飙升影响，英国监管机构Ofgem将从明年1月起把居民能源价格上限上调26%，新上限为期三个月。</p>  <div class="news-impact">  <span class="impact-label">深度逻辑</span>  <span>气价波动抬高欧洲高耗能企业的成本风险，英国居民能源账单上涨也可能挤压可选消费。</span></div>  <div class="news-footer">    <span class="source-meta">📰 彭博市场 · 21:24 / 金融时报 · 15:58</span>    <a class="source-link" href="https://www.bloomberg.com/news/newsletters/2026-11-25/europe-s-gas-traders-are-in-for-a-volatile-winter" target="_blank" rel="noopener noreferrer">阅读原文 ↗</a>  </div></article>
+<article id="us-6" class="news-card" data-score="3" data-sentiment="bear">  <div class="news-top">    <span class="news-idx">#06</span>    <span class="score-pill" title="重磅指数 3/5"><span class="stars-on">★★★</span><span class="stars-off">☆☆</span></span>    <span class="tag-pill">科技</span>    <span class="sent-pill sent-bear">▼ 利空</span>  </div>  <h3 class="news-title">欧盟推迟特斯拉自动驾驶技术审批讨论</h3>  <p class="news-fact">路透报道称，欧盟推迟了有关批准特斯拉自动驾驶技术的讨论。报道所附摘要未交代推迟原因、原定讨论日期或新的审议安排，特斯拉相关功能何时能取得欧盟监管批准仍有待明确。</p>  <div class="news-impact">  <span class="impact-label">深度逻辑</span>  <span>审议时间推迟增加特斯拉在欧洲推广相关功能的时间不确定性，可能拖累其软件收入预期。</span></div>  <div class="news-footer">    <span class="source-meta">📰 路透商业 · 21:32</span>    <span class="source-nolink">快讯电报</span>  </div></article></div>  <div class="empty-hint" data-empty-for="us">当前筛选条件下暂无美股/全球财经新闻</div></section>
+<section id="cn-a" class="section" data-section="cn">  <div class="section-header">    <h2 class="section-title">🇨🇳 国内盘后公告与宏观新增</h2>    <span class="section-count" data-count-for="cn">0 条精选</span>  </div>  <div class="news-list"><div class="news-card"><div class="news-fact">本时段暂无重要更新</div></div></div>  <div class="empty-hint" data-empty-for="cn">当前筛选条件下暂无 A 股/宏观新闻</div></section>
+<section id="general" class="section" data-section="gen">  <div class="section-header">    <h2 class="section-title">🌐 国际时政与前沿科技</h2>    <span class="section-count" data-count-for="gen">4 条精选</span>  </div>  <div class="news-list"><article id="gen-1" class="news-card" data-score="4" data-sentiment="neutral">  <div class="news-top">    <span class="news-idx">#01</span>    <span class="score-pill" title="重磅指数 4/5"><span class="stars-on">★★★★</span><span class="stars-off">☆</span></span>    <span class="tag-pill">国际</span>      </div>  <h3 class="news-title">安世半导体争端中方敦促荷兰改善营商环境</h3>  <p class="news-fact">路透报道称，围绕安世半导体的争端，中方敦促荷兰提供公平、可预期的营商环境。此番表态将企业争端与经营环境的可预期性联系起来，报道所附摘要未披露荷方回应或具体解决进展。</p>    <div class="news-footer">    <span class="source-meta">📰 路透国际 · 21:53</span>    <span class="source-nolink">快讯电报</span>  </div></article>
+<article id="gen-2" class="news-card" data-score="4" data-sentiment="neutral">  <div class="news-top">    <span class="news-idx">#02</span>    <span class="score-pill" title="重磅指数 4/5"><span class="stars-on">★★★★</span><span class="stars-off">☆</span></span>    <span class="tag-pill">商业</span>      </div>  <h3 class="news-title">Shein将支付1亿美元了结美方指控</h3>  <p class="news-fact">《金融时报》报道，Shein将支付1亿美元，以了结美国监管机构关于其误导消费者的指控。监管方称，Shein就其棉质面料产地作出误导性陈述，并压制负面用户评价，争议涉及商品信息披露和平台评论管理。</p>    <div class="news-footer">    <span class="source-meta">📰 金融时报 · 19:18</span>    <a class="source-link" href="https://www.ft.com/content/0128d44e-8ca1-49b8-868b-b8fe0e4824c6?syn-25a6b1a6=1" target="_blank" rel="noopener noreferrer">阅读原文 ↗</a>  </div></article>
+<article id="gen-3" class="news-card" data-score="4" data-sentiment="neutral">  <div class="news-top">    <span class="news-idx">#03</span>    <span class="score-pill" title="重磅指数 4/5"><span class="stars-on">★★★★</span><span class="stars-off">☆</span></span>    <span class="tag-pill">国际</span>      </div>  <h3 class="news-title">神舟二十四号发射，巴基斯坦航天员首登天宫</h3>  <p class="news-fact">BBC中文报道，神舟二十四号成功发射，航天员阿里成为首位登上中国天宫空间站的巴基斯坦航天员。BBC将此次任务视为巴基斯坦载人航天参与的一项里程碑，并置于中美太空竞争的背景下解读。</p>    <div class="news-footer">    <span class="source-meta">📰 BBC中文 · 17:44</span>    <a class="source-link" href="https://www.bbc.com/zhongwen/articles/cm9w91y0pge7o/trad?at_medium=RSS&amp;at_campaign=rss" target="_blank" rel="noopener noreferrer">阅读原文 ↗</a>  </div></article>
+<article id="gen-4" class="news-card" data-score="3" data-sentiment="neutral">  <div class="news-top">    <span class="news-idx">#04</span>    <span class="score-pill" title="重磅指数 3/5"><span class="stars-on">★★★</span><span class="stars-off">☆☆</span></span>    <span class="tag-pill">商业</span>      </div>  <h3 class="news-title">欧盟拟推统一公司制度，便利初创融资受阻</h3>  <p class="news-fact">彭博报道，欧洲试图借鉴美国特拉华州公司制度，以便利初创企业融资，但相关构想遇阻。倡议组织EU-Inc的发起人称，欧盟成员国大幅削弱了原方案，争议集中在最终制度能否降低初创公司的融资门槛。</p>    <div class="news-footer">    <span class="source-meta">📰 彭博科技 · 20:02</span>    <a class="source-link" href="https://www.bloomberg.com/news/newsletters/2026-11-25/europe-s-answer-to-delaware-style-system-for-investment-hits-roadblock" target="_blank" rel="noopener noreferrer">阅读原文 ↗</a>  </div></article></div>  <div class="empty-hint" data-empty-for="gen">当前筛选条件下暂无国际/科技新闻</div></section>
+
+    <footer>
+      <div>权威信源：Bloomberg · Financial Times · Reuters · WSJ · CNBC · 财联社 · BBC（按重磅程度排序）</div>
+      <div>精准行情：Yahoo Finance &amp; 东方财富（代码直出，零模型幻觉） · 每日 08:30 / 15:30 / 22:00 自动推送</div>
+    </footer>
+  </main>
+
+  <button class="back-top" id="backTop" type="button" aria-label="返回顶部">↑</button>
+
+  <script>
+    (function () {
+      const root = document.documentElement;
+      const themeBtn = document.getElementById("themeToggle");
+      const saved = localStorage.getItem("brief-theme") || "dark";
+      function applyTheme(t) {
+        root.setAttribute("data-theme", t);
+        themeBtn.textContent = t === "dark" ? "☀️ 浅色" : "🌙 深色";
+      }
+      applyTheme(saved);
+      themeBtn.addEventListener("click", function () {
+        const next = root.getAttribute("data-theme") === "dark" ? "light" : "dark";
+        localStorage.setItem("brief-theme", next);
+        applyTheme(next);
+      });
+
+      const progressEl = document.getElementById("readProgress");
+      const backTopBtn = document.getElementById("backTop");
+      window.addEventListener("scroll", function () {
+        const scrollTop = window.scrollY || document.documentElement.scrollTop;
+        const docHeight = document.documentElement.scrollHeight - window.innerHeight;
+        const pct = docHeight > 0 ? Math.min(100, (scrollTop / docHeight) * 100) : 0;
+        progressEl.style.width = pct + "%";
+        backTopBtn.classList.toggle("visible", scrollTop > 420);
+      }, { passive: true });
+      backTopBtn.addEventListener("click", function () {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      });
+
+      let activeFilter = "all";
+      const filterBtns = document.querySelectorAll(".filter-btn");
+      const searchInput = document.getElementById("searchInput");
+      const sections = document.querySelectorAll("section[data-section]");
+
+      function applyFilters() {
+        const kw = (searchInput.value || "").trim().toLowerCase();
+        sections.forEach(function (sec) {
+          const secKey = sec.getAttribute("data-section");
+          const cards = sec.querySelectorAll(".news-card");
+          let visibleCount = 0;
+
+          cards.forEach(function (card) {
+            const score = parseInt(card.getAttribute("data-score") || "3", 10);
+            const sent = card.getAttribute("data-sentiment") || "neutral";
+            const text = (card.textContent || "").toLowerCase();
+
+            let matchFilter = true;
+            if (activeFilter === "top") matchFilter = score >= 4;
+            else if (activeFilter === "bull") matchFilter = sent === "bull";
+            else if (activeFilter === "bear") matchFilter = sent === "bear";
+
+            const matchSearch = !kw || text.includes(kw);
+            const show = matchFilter && matchSearch;
+            card.classList.toggle("is-hidden", !show);
+            if (show) visibleCount++;
+          });
+
+          const countEl = document.querySelector('[data-count-for="' + secKey + '"]');
+          const emptyEl = document.querySelector('[data-empty-for="' + secKey + '"]');
+          if (countEl) countEl.textContent = visibleCount + " 条显示";
+          if (emptyEl) emptyEl.classList.toggle("show", visibleCount === 0);
+        });
+      }
+
+      filterBtns.forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          filterBtns.forEach(function (b) { b.classList.remove("active"); });
+          btn.classList.add("active");
+          activeFilter = btn.getAttribute("data-filter") || "all";
+          applyFilters();
+        });
+      });
+      searchInput.addEventListener("input", applyFilters);
+    })();
+  </script>
+</body>
+</html>
