@@ -1,5 +1,4 @@
 import os
-import sys
 import re
 import math
 import json
@@ -72,23 +71,42 @@ GENERAL_NEWS_RSS = {
 
 
 def resolve_edition(edition_arg, now):
-    """确定当前是早报(am)还是晚报(pm)：北京时间 15:00 前为早报，之后为晚报"""
-    if edition_arg in ("am", "pm"):
+    """按北京时间自动识别版本：00-11点早报(am)，12-18点收盘报(close)，19-23点晚报(pm)"""
+    if edition_arg in ("am", "close", "pm"):
         return edition_arg
-    return "am" if now.hour < 15 else "pm"
+    if now.hour < 12:
+        return "am"
+    if now.hour < 19:
+        return "close"
+    return "pm"
 
 
 def get_edition_meta(edition):
+    if edition == "close":
+        return {
+            "code": "close",
+            "name": "收盘报",
+            "full_name": "全球财经与A股收盘报",
+            "icon": "🌇",
+            "badge_text": "🌇 收盘版 · A股全天复盘与日间催化",
+            "rss_hours": 10,
+            "cls_limit": 65,
+            "us_card_title": "🇺🇸 美股上日收盘",
+            "a_card_title": "🇨🇳 A 股今日收盘",
+            "feishu_neutral_color": "orange",
+        }
     if edition == "pm":
         return {
             "code": "pm",
             "name": "晚报",
-            "full_name": "全球财经与热点晚报",
+            "full_name": "全球财经与美股晚报",
             "icon": "🌙",
-            "badge_text": "🌙 晚报版 · 日终复盘与美股前瞻",
-            "rss_hours": 14,
+            "badge_text": "🌙 晚报版 · 欧盘动向与美股前瞻",
+            "rss_hours": 10,
+            "cls_limit": 50,
             "us_card_title": "🇺🇸 美股最新 / 盘面",
             "a_card_title": "🇨🇳 A 股今日收盘",
+            "feishu_neutral_color": "indigo",
         }
     return {
         "code": "am",
@@ -96,9 +114,11 @@ def get_edition_meta(edition):
         "full_name": "全球财经与热点早报",
         "icon": "☕",
         "badge_text": "☀️ 早报版 · 隔夜美股与盘前催化",
-        "rss_hours": 20,
+        "rss_hours": 16,
+        "cls_limit": 55,
         "us_card_title": "🇺🇸 隔夜美股指数",
         "a_card_title": "🇨🇳 A 股上日收盘",
+        "feishu_neutral_color": "blue",
     }
 
 
@@ -133,9 +153,22 @@ def safe_score(val):
         return 3
 
 
+def archive_sort_key(entry_id):
+    """确保同一天严格按 pm(3) > close(2) > am(1) 倒序排列"""
+    if entry_id.endswith("-pm"):
+        return (entry_id[:-3], 3)
+    if entry_id.endswith("-close"):
+        return (entry_id[:-6], 2)
+    if entry_id.endswith("-am"):
+        return (entry_id[:-3], 1)
+    return (entry_id, 0)
+
+
 def format_archive_label(entry_id):
     if entry_id.endswith("-am"):
         return f"{entry_id[:-3]} ☀️早报"
+    if entry_id.endswith("-close"):
+        return f"{entry_id[:-6]} 🌇收盘"
     if entry_id.endswith("-pm"):
         return f"{entry_id[:-3]} 🌙晚报"
     return entry_id
@@ -224,7 +257,7 @@ def get_a_market():
     return results
 
 
-def fetch_rss_within_hours(rss_dict, hours=20, max_per_feed=7):
+def fetch_rss_within_hours(rss_dict, hours=12, max_per_feed=7):
     """抓取指定时间窗口内的顶级 RSS 信源并按时间倒序排列（若条目过少自动放宽至 24h）"""
     def _collect(window_hours):
         now_utc = datetime.datetime.now(datetime.timezone.utc)
@@ -297,24 +330,35 @@ def fetch_cls_telegraph(limit=55):
 
 
 def analyze_with_llm(global_fin_raw, cn_fin_raw, general_raw, edition):
-    """按早报/晚报差异化定位，调用大模型去重、精译与重磅评级"""
+    """按早报/收盘报/晚报差异化定位，调用大模型去重、精译与重磅评级"""
     client = OpenAI(api_key=LLM_API_KEY, base_url=LLM_BASE_URL)
     now_str = datetime.datetime.now(BJ_TZ).strftime("%Y-%m-%d %H:%M")
 
-    if edition == "pm":
+    if edition == "close":
         role_focus = (
-            "当前为【晚报（22:00）】：请重点复盘今天 A 股收盘主线、白天国内政策与产业重磅消息、"
-            "欧洲盘面动向，以及今晚美股盘前/刚开盘的核心催化（财报、CPI/非农等宏观数据与科技巨头动态）。"
-            "尽量优先选取今天白天至晚间的新增增量消息，避免炒冷饭。"
+            "当前为【A股收盘报（15:30）】：请重点复盘今天 A 股与港股全天盘面主线、领涨领跌逻辑、"
+            "白天国内部委政策/产业突发催化，以及亚太市场与欧盘早段动态。请把 A 股与国内产业内容做深做实，"
+            "海外部分优先提炼今天白天新增的增量消息，避免重复早上 8:30 已报过的隔夜旧闻。"
         )
-        overview_guide = "150-200字的今日晚报全景复盘。总结今天A股核心强弱与政策催化，串联欧盘与今晚美股盘前/开盘最值得盯紧的变量与风险。"
+        overview_guide = "150-200字的A股收盘全景复盘。梳理今天国内市场核心强弱、成交与板块轮动逻辑、白天重磅政策或产业催化，以及晚间欧美市场前瞻看点。"
+        count_req = "cn_a_news 精选 6 条最具价值的国内A股/政策/产业新闻；us_global_news 精选 4 条今天白天新增的全球/美股盘前动态；general_news 精选 4 条高价值国际时政或前沿科技新闻。"
+        brief_type = "收盘报"
+    elif edition == "pm":
+        role_focus = (
+            "当前为【晚报（22:00）】：请重点聚焦欧洲盘面走势、今晚美股盘前及刚开盘的核心催化"
+            "（如美国 CPI/非农/PMI 等晚间宏观数据、美联储官员最新表态、科技巨头盘前财报与异动），"
+            "同时补充下午 15:30 收盘后国内发布的重磅政策或龙头公司盘后公告。务必优先抓取晚间新鲜增量消息。"
+        )
+        overview_guide = "150-200字的晚报全景前瞻。串联今晚美股盘前/开盘最核心的宏观数据与科技股催化、大宗与加密异动，并补充国内盘后值得关注的新增变量。"
+        count_req = "us_global_news 精选 6 条最重要的晚间美股/欧美宏观与科技巨头新闻；cn_a_news 精选 4 条国内盘后新增重磅政策或公司公告；general_news 精选 4 条高价值国际时政或前沿科技新闻。"
         brief_type = "晚报"
     else:
         role_focus = (
             "当前为【早报（08:30）】：请重点聚焦隔夜美股收盘主线、美联储与全球宏观动向、"
             "科技巨头盘后财报与大宗/加密异动，以及今天 A 股开盘前最值得关注的产业催化与风险。"
         )
-        overview_guide = "150-200字的今日早报全景总览。串联隔夜美股核心驱动、宏观利率/政策预期变化，以及今天A股与科技线需要重点关注的催化或风险。"
+        overview_guide = "150-200字的早报全景总览。串联隔夜美股核心驱动、宏观利率/政策预期变化，以及今天A股与科技线需要重点关注的催化或风险。"
+        count_req = "us_global_news 精选 6 条最重要的隔夜美股与全球财经新闻；cn_a_news 精选 5 条最具影响力的国内宏观/A股盘前产业新闻；general_news 精选 4 条高价值国际时政或前沿科技新闻。"
         brief_type = "早报"
 
     prompt = f"""你是一位华尔街见闻与彭博风格的资深财经总编。当前北京时间：{now_str}。
@@ -368,7 +412,7 @@ def analyze_with_llm(global_fin_raw, cn_fin_raw, general_raw, edition):
 }}
 
 严格要求：
-1. 这是每日{brief_type}：us_global_news 精选 6 条、cn_a_news 精选 5 条、general_news 精选 4 条，每个列表内按 score 从高到低排列。
+1. 这是每日{brief_type}：{count_req} 每个列表内按 score 从高到低排列。
 2. 严禁编造数据或链接，所有事实必须来自下方原始素材。
 
 【全球与美股顶级财经信源】：
@@ -510,7 +554,7 @@ def render_market_card_html(title, subtitle, data, is_us=True, card_prefix="m"):
 def render_top_picks_html(llm_data, edition):
     sec_map = (
         [("cn_a_news", "cn", "A股/宏观"), ("us_global_news", "us", "美股/全球"), ("general_news", "gen", "国际/科技")]
-        if edition == "pm"
+        if edition == "close"
         else [("us_global_news", "us", "美股/全球"), ("cn_a_news", "cn", "A股/宏观"), ("general_news", "gen", "国际/科技")]
     )
     candidates = []
@@ -629,7 +673,7 @@ def build_archive_select_html(entry_ids, current_id, is_archive=False):
         target = f"{prefix}{eid}.html"
         options.append(f'<option value="{esc(target)}"{selected}>{esc(label)}</option>')
     return (
-        '<select class="archive-select" aria-label="往期早晚报" '
+        '<select class="archive-select" aria-label="往期早中晚报" '
         'onchange="if(this.value) window.location.href=this.value">'
         + "".join(options)
         + "</select>"
@@ -637,11 +681,23 @@ def build_archive_select_html(entry_ids, current_id, is_archive=False):
 
 
 def render_news_sections_html(us_news, cn_news, gen_news, edition):
-    """早报优先展示美股/全球，晚报优先展示 A 股/国内宏观"""
+    """收盘报优先展示 A股/国内，早报与晚报优先展示美股/全球"""
+    us_title = {
+        "am": "隔夜美股与全球财经",
+        "close": "亚欧盘面与美股日间动态",
+        "pm": "美股盘前/开盘与欧美宏观",
+    }.get(edition, "美股与全球财经")
+
+    cn_title = {
+        "am": "A 股盘前与国内宏观",
+        "close": "A 股全天收盘与产业催化",
+        "pm": "国内盘后公告与宏观新增",
+    }.get(edition, "A 股与国内宏观")
+
     us_section = (
         f'<section id="us-global" class="section" data-section="us">'
         f'  <div class="section-header">'
-        f'    <h2 class="section-title">🇺🇸 {"美股盘前与全球财经" if edition == "pm" else "美股与全球财经"}</h2>'
+        f'    <h2 class="section-title">🇺🇸 {us_title}</h2>'
         f'    <span class="section-count" data-count-for="us">{len(us_news)} 条精选</span>'
         f'  </div>'
         f'  <div class="news-list">{render_news_cards_html(us_news, "us", with_impact=True)}</div>'
@@ -651,7 +707,7 @@ def render_news_sections_html(us_news, cn_news, gen_news, edition):
     cn_section = (
         f'<section id="cn-a" class="section" data-section="cn">'
         f'  <div class="section-header">'
-        f'    <h2 class="section-title">🇨🇳 {"A 股收盘与国内宏观" if edition == "pm" else "A 股与国内宏观"}</h2>'
+        f'    <h2 class="section-title">🇨🇳 {cn_title}</h2>'
         f'    <span class="section-count" data-count-for="cn">{len(cn_news)} 条精选</span>'
         f'  </div>'
         f'  <div class="news-list">{render_news_cards_html(cn_news, "cn", with_impact=True)}</div>'
@@ -668,7 +724,7 @@ def render_news_sections_html(us_news, cn_news, gen_news, edition):
         f'  <div class="empty-hint" data-empty-for="gen">当前筛选条件下暂无国际/科技新闻</div>'
         f'</section>'
     )
-    if edition == "pm":
+    if edition == "close":
         return "\n".join([cn_section, us_section, gen_section])
     return "\n".join([us_section, cn_section, gen_section])
 
@@ -695,8 +751,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       --text-muted: #64748b;
       --accent: #38bdf8;
       --accent-soft: rgba(56, 189, 248, 0.12);
-      --edition-bg: rgba(245, 158, 11, 0.14);
-      --edition-color: #fbbf24;
+      --edition-bg: rgba(56, 189, 248, 0.14);
+      --edition-color: #7dd3fc;
       --green: #10b981;
       --green-bg: rgba(16, 185, 129, 0.14);
       --red: #f43f5e;
@@ -709,6 +765,15 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       --font-sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI", sans-serif;
       --font-serif: "Songti SC", "STSong", "Noto Serif CJK SC", "Source Han Serif SC", Georgia, serif;
       --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    }
+
+    [data-edition="close"] {
+      --bg-glow-1: rgba(245, 158, 11, 0.13);
+      --bg-glow-2: rgba(244, 63, 94, 0.08);
+      --accent: #f59e0b;
+      --accent-soft: rgba(245, 158, 11, 0.14);
+      --edition-bg: rgba(245, 158, 11, 0.16);
+      --edition-color: #fcd34d;
     }
 
     [data-edition="pm"] {
@@ -735,8 +800,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       --text-muted: #64748b;
       --accent: #0284c7;
       --accent-soft: rgba(2, 132, 199, 0.1);
-      --edition-bg: rgba(217, 119, 6, 0.12);
-      --edition-color: #b45309;
+      --edition-bg: rgba(2, 132, 199, 0.11);
+      --edition-color: #0369a1;
       --green: #059669;
       --green-bg: rgba(5, 150, 105, 0.1);
       --red: #e11d48;
@@ -746,6 +811,13 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       --breaking-border: rgba(217, 119, 6, 0.48);
       --breaking-glow: 0 10px 26px -12px rgba(217, 119, 6, 0.18);
       --shadow: 0 6px 22px -10px rgba(15, 23, 42, 0.08);
+    }
+
+    [data-theme="light"][data-edition="close"] {
+      --accent: #d97706;
+      --accent-soft: rgba(217, 119, 6, 0.11);
+      --edition-bg: rgba(217, 119, 6, 0.12);
+      --edition-color: #b45309;
     }
 
     [data-theme="light"][data-edition="pm"] {
@@ -872,12 +944,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       gap: 10px;
       margin-bottom: 14px;
     }
-    .hero-meta-left {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 10px;
-    }
+    .hero-meta-left { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
     .edition-pill {
       display: inline-flex;
       align-items: center;
@@ -1179,7 +1246,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       <a class="brand" href="__HOME_LINK__">
         <span class="brand-mark">DB</span>
         <span class="brand-title">DAILY BRIEF</span>
-        <span class="brand-sub">早晚报双推终端</span>
+        <span class="brand-sub">早 · 收盘 · 晚 三推终端</span>
       </a>
       <div class="controls">
         __ARCHIVE_SELECT__
@@ -1233,7 +1300,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
     <footer>
       <div>权威信源：Bloomberg · Financial Times · Reuters · WSJ · CNBC · 财联社 · BBC（按重磅程度排序）</div>
-      <div>精准行情：Yahoo Finance &amp; 东方财富（代码直出，零模型幻觉） · 早报 08:30 / 晚报 22:00 自动推送</div>
+      <div>精准行情：Yahoo Finance &amp; 东方财富（代码直出，零模型幻觉） · 每日 08:30 / 15:30 / 22:00 自动推送</div>
     </footer>
   </main>
 
@@ -1334,8 +1401,8 @@ def render_page_html(now, edition, us_idx, tech_stocks, a_idx, macro_assets, llm
     }
     mood_cls, mood_label = mood_map.get(mood, ("mood-neutral", f"📊 每日{meta['name']}"))
 
-    if edition == "pm":
-        tape_groups = [(a_idx, False), (us_idx, True), (tech_stocks, True), (macro_assets, True)]
+    if edition == "close":
+        tape_groups = [(a_idx, False), (macro_assets, True), (us_idx, True), (tech_stocks, True)]
         market_cards = "\n".join([
             render_market_card_html(meta["a_card_title"], "红涨绿跌 · 7日趋势", a_idx, is_us=False, card_prefix="cn"),
             render_market_card_html("🌍 大宗 · 加密 · 汇率", "绿涨红跌 · 7日趋势", macro_assets, is_us=True, card_prefix="mc"),
@@ -1344,11 +1411,26 @@ def render_page_html(now, edition, us_idx, tech_stocks, a_idx, macro_assets, llm
         ])
         quick_nav = (
             '<a href="#markets">📊 跨市场行情</a>'
-            '<a href="#cn-a">🇨🇳 A股收盘与宏观</a>'
-            '<a href="#us-global">🇺🇸 美股盘前与全球</a>'
+            '<a href="#cn-a">🇨🇳 A股收盘复盘</a>'
+            '<a href="#us-global">🇺🇸 亚欧与美股动态</a>'
             '<a href="#general">🌐 国际时政与科技</a>'
         )
-        overview_title = "今日晚报复盘与美股前瞻"
+        overview_title = "A 股收盘全景复盘"
+    elif edition == "pm":
+        tape_groups = [(us_idx, True), (tech_stocks, True), (macro_assets, True), (a_idx, False)]
+        market_cards = "\n".join([
+            render_market_card_html(meta["us_card_title"], "绿涨红跌 · 7日趋势", us_idx, is_us=True, card_prefix="us"),
+            render_market_card_html("🚀 美股科技风向", "绿涨红跌 · 7日趋势", tech_stocks, is_us=True, card_prefix="tk"),
+            render_market_card_html("🌍 大宗 · 加密 · 汇率", "绿涨红跌 · 7日趋势", macro_assets, is_us=True, card_prefix="mc"),
+            render_market_card_html(meta["a_card_title"], "红涨绿跌 · 7日趋势", a_idx, is_us=False, card_prefix="cn"),
+        ])
+        quick_nav = (
+            '<a href="#markets">📊 跨市场行情</a>'
+            '<a href="#us-global">🇺🇸 美股盘前与宏观</a>'
+            '<a href="#cn-a">🇨🇳 国内盘后新增</a>'
+            '<a href="#general">🌐 国际时政与科技</a>'
+        )
+        overview_title = "晚间美股前瞻与跨市场总览"
     else:
         tape_groups = [(us_idx, True), (tech_stocks, True), (a_idx, False), (macro_assets, True)]
         market_cards = "\n".join([
@@ -1359,8 +1441,8 @@ def render_page_html(now, edition, us_idx, tech_stocks, a_idx, macro_assets, llm
         ])
         quick_nav = (
             '<a href="#markets">📊 跨市场行情</a>'
-            '<a href="#us-global">🇺🇸 美股与全球财经</a>'
-            '<a href="#cn-a">🇨🇳 A股与国内宏观</a>'
+            '<a href="#us-global">🇺🇸 隔夜美股与全球</a>'
+            '<a href="#cn-a">🇨🇳 A股盘前与宏观</a>'
             '<a href="#general">🌐 国际时政与科技</a>'
         )
         overview_title = "今日早报主编全景总览"
@@ -1397,7 +1479,7 @@ def render_page_html(now, edition, us_idx, tech_stocks, a_idx, macro_assets, llm
 
 
 def save_web_pages(now, edition, us_idx, tech_stocks, a_idx, macro_assets, llm_data):
-    """生成 docs/index.html 与独立的 docs/archive/YYYY-MM-DD-am|pm.html"""
+    """生成 docs/index.html 与独立的 docs/archive/YYYY-MM-DD-am|close|pm.html"""
     DOCS_DIR.mkdir(parents=True, exist_ok=True)
     ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -1412,8 +1494,8 @@ def save_web_pages(now, edition, us_idx, tech_stocks, a_idx, macro_assets, llm_d
 
     if edition_id not in entries:
         entries.append(edition_id)
-    # 倒序排列：同一天 pm 自动排在 am 之前，保留最近 120 期（约 60 天早晚报）
-    entries = sorted(set(entries), reverse=True)[:120]
+    # 严格按日期 + (pm > close > am) 倒序排列，保留最近 180 期（约 60 天）
+    entries = sorted(set(entries), key=archive_sort_key, reverse=True)[:180]
     manifest_file.write_text(json.dumps(entries, ensure_ascii=False, indent=2), encoding="utf-8")
 
     index_html = render_page_html(now, edition, us_idx, tech_stocks, a_idx, macro_assets, llm_data, entries, is_archive=False)
@@ -1443,7 +1525,7 @@ def format_market_md(data, is_us=False):
 
 
 def build_feishu_summary_card(now, edition, edition_id, us_idx, tech_stocks, a_idx, macro_assets, llm_data, site_url):
-    """构建早/晚报专属飞书精简入口卡片（直链独立归档页，避免晚报覆盖早报链接）"""
+    """构建早/收盘/晚报专属飞书精简入口卡片（直链独立归档页）"""
     meta = get_edition_meta(edition)
     today_str = now.strftime("%Y年%m月%d日")
     weekday = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"][now.weekday()]
@@ -1451,9 +1533,9 @@ def build_feishu_summary_card(now, edition, edition_id, us_idx, tech_stocks, a_i
     mood_map = {
         "bullish": ("red", "🔥 风险偏好回升"),
         "bearish": ("green", "❄️ 市场情绪偏谨慎"),
-        "neutral": ("indigo" if edition == "pm" else "blue", "⚖️ 震荡分化格局"),
+        "neutral": (meta["feishu_neutral_color"], "⚖️ 震荡分化格局"),
     }
-    header_color, mood_label = mood_map.get(llm_data.get("mood", "neutral"), ("blue", f"📊 每日{meta['name']}"))
+    header_color, mood_label = mood_map.get(llm_data.get("mood", "neutral"), (meta["feishu_neutral_color"], f"📊 每日{meta['name']}"))
 
     merged = []
     for key in ("us_global_news", "cn_a_news", "general_news"):
@@ -1468,16 +1550,21 @@ def build_feishu_summary_card(now, edition, edition_id, us_idx, tech_stocks, a_i
         preview_lines.append(f"{prefix} **[{item.get('tag', '要闻')}]** {item.get('title', '')}")
     preview_md = "\n".join(preview_lines)
 
-    if edition == "pm":
-        row1_left = (f"🇨🇳 **A 股今日收盘**\n{format_market_md(a_idx, is_us=False)}")
-        row1_right = (f"🌍 **大宗与加密**\n{format_market_md(macro_assets, is_us=True)}")
-        row2_left = (f"🇺🇸 **美股指数**\n{format_market_md(us_idx, is_us=True)}")
-        row2_right = (f"🚀 **焦点科技**\n{format_market_md(tech_stocks, is_us=True)}")
+    if edition == "close":
+        row1_left = f"🇨🇳 **A 股今日收盘**\n{format_market_md(a_idx, is_us=False)}"
+        row1_right = f"🌍 **大宗与加密**\n{format_market_md(macro_assets, is_us=True)}"
+        row2_left = f"🇺🇸 **美股上日收盘**\n{format_market_md(us_idx, is_us=True)}"
+        row2_right = f"🚀 **焦点科技**\n{format_market_md(tech_stocks, is_us=True)}"
+    elif edition == "pm":
+        row1_left = f"🇺🇸 **美股指数**\n{format_market_md(us_idx, is_us=True)}"
+        row1_right = f"🚀 **焦点科技**\n{format_market_md(tech_stocks, is_us=True)}"
+        row2_left = f"🌍 **大宗与加密**\n{format_market_md(macro_assets, is_us=True)}"
+        row2_right = f"🇨🇳 **A 股今日收盘**\n{format_market_md(a_idx, is_us=False)}"
     else:
-        row1_left = (f"🇺🇸 **隔夜美股**\n{format_market_md(us_idx, is_us=True)}")
-        row1_right = (f"🚀 **焦点科技**\n{format_market_md(tech_stocks, is_us=True)}")
-        row2_left = (f"🇨🇳 **A 股收盘**\n{format_market_md(a_idx, is_us=False)}")
-        row2_right = (f"🌍 **大宗与加密**\n{format_market_md(macro_assets, is_us=True)}")
+        row1_left = f"🇺🇸 **隔夜美股**\n{format_market_md(us_idx, is_us=True)}"
+        row1_right = f"🚀 **焦点科技**\n{format_market_md(tech_stocks, is_us=True)}"
+        row2_left = f"🇨🇳 **A 股收盘**\n{format_market_md(a_idx, is_us=False)}"
+        row2_right = f"🌍 **大宗与加密**\n{format_market_md(macro_assets, is_us=True)}"
 
     elements = [
         {
@@ -1524,13 +1611,13 @@ def build_feishu_summary_card(now, edition, edition_id, us_idx, tech_stocks, a_i
             ],
         })
 
-    # 注脚同时保留“早报/晚报”，确保飞书机器人已配置的“早报”安全关键词始终命中
+    # 注脚始终包含“早报”，兼容飞书机器人已配置的“早报”安全关键词
     elements.append({
         "tag": "note",
         "elements": [
             {
                 "tag": "plain_text",
-                "content": f"早报/晚报双推终端 · 信源：Bloomberg / FT / Reuters / WSJ / CNBC / 财联社 / BBC | {now.strftime('%H:%M')}",
+                "content": f"早报/收盘报/晚报三推终端 · 信源：Bloomberg / FT / Reuters / WSJ / CNBC / 财联社 / BBC | {now.strftime('%H:%M')}",
             }
         ],
     })
@@ -1563,7 +1650,7 @@ def run_generate(edition_arg="auto"):
     print(f"2/3 正在抓取过去 {meta['rss_hours']} 小时机构级信源...")
     global_fin_raw = fetch_rss_within_hours(GLOBAL_FINANCE_RSS, hours=meta["rss_hours"], max_per_feed=7)
     general_raw = fetch_rss_within_hours(GENERAL_NEWS_RSS, hours=meta["rss_hours"], max_per_feed=5)
-    cn_fin_raw = fetch_cls_telegraph(limit=55)
+    cn_fin_raw = fetch_cls_telegraph(limit=meta["cls_limit"])
 
     print("3/3 正在调用大模型评级排序并渲染网页...")
     llm_data = analyze_with_llm(global_fin_raw, cn_fin_raw, general_raw, edition)
@@ -1594,7 +1681,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--generate", action="store_true")
     parser.add_argument("--notify", action="store_true")
-    parser.add_argument("--edition", choices=["auto", "am", "pm"], default="auto")
+    parser.add_argument("--edition", choices=["auto", "am", "close", "pm"], default="auto")
     args = parser.parse_args()
 
     if args.generate:
