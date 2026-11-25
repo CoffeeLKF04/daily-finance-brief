@@ -4,6 +4,7 @@ import re
 import math
 import json
 import html
+import argparse
 import calendar
 import datetime
 from pathlib import Path
@@ -70,8 +71,39 @@ GENERAL_NEWS_RSS = {
 # ====================================================================
 
 
+def resolve_edition(edition_arg, now):
+    """确定当前是早报(am)还是晚报(pm)：北京时间 15:00 前为早报，之后为晚报"""
+    if edition_arg in ("am", "pm"):
+        return edition_arg
+    return "am" if now.hour < 15 else "pm"
+
+
+def get_edition_meta(edition):
+    if edition == "pm":
+        return {
+            "code": "pm",
+            "name": "晚报",
+            "full_name": "全球财经与热点晚报",
+            "icon": "🌙",
+            "badge_text": "🌙 晚报版 · 日终复盘与美股前瞻",
+            "rss_hours": 14,
+            "us_card_title": "🇺🇸 美股最新 / 盘面",
+            "a_card_title": "🇨🇳 A 股今日收盘",
+        }
+    return {
+        "code": "am",
+        "name": "早报",
+        "full_name": "全球财经与热点早报",
+        "icon": "☕",
+        "badge_text": "☀️ 早报版 · 隔夜美股与盘前催化",
+        "rss_hours": 20,
+        "us_card_title": "🇺🇸 隔夜美股指数",
+        "a_card_title": "🇨🇳 A 股上日收盘",
+    }
+
+
 def get_site_url():
-    """自动推算 GitHub Pages 网址（用户名自动转小写，避免 404），也支持 SITE_URL 自定义域名"""
+    """自动推算 GitHub Pages 网址（用户名自动转小写，避免 404）"""
     custom = os.environ.get("SITE_URL", "").strip()
     if custom:
         return custom.rstrip("/") + "/"
@@ -99,6 +131,14 @@ def safe_score(val):
         return max(1, min(5, s))
     except Exception:
         return 3
+
+
+def format_archive_label(entry_id):
+    if entry_id.endswith("-am"):
+        return f"{entry_id[:-3]} ☀️早报"
+    if entry_id.endswith("-pm"):
+        return f"{entry_id[:-3]} 🌙晚报"
+    return entry_id
 
 
 def fetch_yf_group(tickers_dict):
@@ -155,7 +195,6 @@ def get_a_market():
         ("创业板指", "399006.SZ"),
         ("沪深300", "000300.SS"),
     ]
-    # 顺手拉取 Yahoo 历史收盘价，既用于绘制迷你走势图，也作为备用行情源
     yf_backup = {item["name"]: item for item in fetch_yf_group({n: s for n, s in targets})}
 
     results = []
@@ -185,52 +224,59 @@ def get_a_market():
     return results
 
 
-def fetch_rss_within_24h(rss_dict, max_per_feed=7):
-    """抓取过去 24 小时内的顶级 RSS 信源并按时间倒序排列"""
-    now_utc = datetime.datetime.now(datetime.timezone.utc)
-    cutoff = now_utc - datetime.timedelta(hours=24)
-    all_lines = []
+def fetch_rss_within_hours(rss_dict, hours=20, max_per_feed=7):
+    """抓取指定时间窗口内的顶级 RSS 信源并按时间倒序排列（若条目过少自动放宽至 24h）"""
+    def _collect(window_hours):
+        now_utc = datetime.datetime.now(datetime.timezone.utc)
+        cutoff = now_utc - datetime.timedelta(hours=window_hours)
+        all_lines = []
 
-    for source_name, urls in rss_dict.items():
-        if isinstance(urls, str):
-            urls = [urls]
+        for source_name, urls in rss_dict.items():
+            if isinstance(urls, str):
+                urls = [urls]
 
-        parsed_items = []
-        for url in urls:
-            try:
-                resp = requests.get(url, headers=HEADERS, timeout=12)
-                resp.raise_for_status()
-                feed = feedparser.parse(resp.content)
-                for entry in feed.entries:
-                    time_struct = entry.get("published_parsed") or entry.get("updated_parsed")
-                    if time_struct:
-                        pub_dt = datetime.datetime.fromtimestamp(
-                            calendar.timegm(time_struct), tz=datetime.timezone.utc
-                        )
-                        if pub_dt < cutoff:
-                            continue
-                        pub_str = pub_dt.astimezone(BJ_TZ).strftime("%m-%d %H:%M")
-                    else:
-                        pub_dt = now_utc - datetime.timedelta(hours=12)
-                        pub_str = "24h内"
+            parsed_items = []
+            for url in urls:
+                try:
+                    resp = requests.get(url, headers=HEADERS, timeout=12)
+                    resp.raise_for_status()
+                    feed = feedparser.parse(resp.content)
+                    for entry in feed.entries:
+                        time_struct = entry.get("published_parsed") or entry.get("updated_parsed")
+                        if time_struct:
+                            pub_dt = datetime.datetime.fromtimestamp(
+                                calendar.timegm(time_struct), tz=datetime.timezone.utc
+                            )
+                            if pub_dt < cutoff:
+                                continue
+                            pub_str = pub_dt.astimezone(BJ_TZ).strftime("%m-%d %H:%M")
+                        else:
+                            pub_dt = now_utc - datetime.timedelta(hours=window_hours / 2)
+                            pub_str = f"{window_hours}h内"
 
-                    title = clean_html(entry.get("title", ""))
-                    summary = clean_html(entry.get("summary", entry.get("description", "")))[:240]
-                    link = entry.get("link", "").strip()
-                    if title:
-                        parsed_items.append((pub_dt, pub_str, title, summary, link))
+                        title = clean_html(entry.get("title", ""))
+                        summary = clean_html(entry.get("summary", entry.get("description", "")))[:240]
+                        link = entry.get("link", "").strip()
+                        if title:
+                            parsed_items.append((pub_dt, pub_str, title, summary, link))
 
-                if parsed_items:
-                    break
-            except Exception as e:
-                print(f"[RSS] {source_name} 抓取失败: {e}")
+                    if parsed_items:
+                        break
+                except Exception as e:
+                    print(f"[RSS] {source_name} 抓取失败: {e}")
 
-        parsed_items.sort(key=lambda x: x[0], reverse=True)
-        for _, pub_str, title, summary, link in parsed_items[:max_per_feed]:
-            all_lines.append(
-                f"[{source_name} | {pub_str}] 标题:{title} | 摘要:{summary} | 链接:{link}"
-            )
-    return "\n".join(all_lines)
+            parsed_items.sort(key=lambda x: x[0], reverse=True)
+            for _, pub_str, title, summary, link in parsed_items[:max_per_feed]:
+                all_lines.append(
+                    f"[{source_name} | {pub_str}] 标题:{title} | 摘要:{summary} | 链接:{link}"
+                )
+        return all_lines
+
+    lines = _collect(hours)
+    if len(lines) < 8 and hours < 24:
+        print(f"[RSS] {hours}h 内条目较少({len(lines)}条)，自动放宽至 24h 补足...")
+        lines = _collect(24)
+    return "\n".join(lines)
 
 
 def fetch_cls_telegraph(limit=55):
@@ -250,24 +296,42 @@ def fetch_cls_telegraph(limit=55):
     return "\n".join(lines)
 
 
-def analyze_with_llm(global_fin_raw, cn_fin_raw, general_raw):
-    """调用大模型去重、精译、重磅评级并输出严格结构化 JSON"""
+def analyze_with_llm(global_fin_raw, cn_fin_raw, general_raw, edition):
+    """按早报/晚报差异化定位，调用大模型去重、精译与重磅评级"""
     client = OpenAI(api_key=LLM_API_KEY, base_url=LLM_BASE_URL)
     now_str = datetime.datetime.now(BJ_TZ).strftime("%Y-%m-%d %H:%M")
 
+    if edition == "pm":
+        role_focus = (
+            "当前为【晚报（22:00）】：请重点复盘今天 A 股收盘主线、白天国内政策与产业重磅消息、"
+            "欧洲盘面动向，以及今晚美股盘前/刚开盘的核心催化（财报、CPI/非农等宏观数据与科技巨头动态）。"
+            "尽量优先选取今天白天至晚间的新增增量消息，避免炒冷饭。"
+        )
+        overview_guide = "150-200字的今日晚报全景复盘。总结今天A股核心强弱与政策催化，串联欧盘与今晚美股盘前/开盘最值得盯紧的变量与风险。"
+        brief_type = "晚报"
+    else:
+        role_focus = (
+            "当前为【早报（08:30）】：请重点聚焦隔夜美股收盘主线、美联储与全球宏观动向、"
+            "科技巨头盘后财报与大宗/加密异动，以及今天 A 股开盘前最值得关注的产业催化与风险。"
+        )
+        overview_guide = "150-200字的今日早报全景总览。串联隔夜美股核心驱动、宏观利率/政策预期变化，以及今天A股与科技线需要重点关注的催化或风险。"
+        brief_type = "早报"
+
     prompt = f"""你是一位华尔街见闻与彭博风格的资深财经总编。当前北京时间：{now_str}。
-请基于以下过去 24 小时内的顶级权威信源（彭博社、金融时报、路透社、WSJ、CNBC、财联社、BBC），合并去重同类事件，将英文报道精准翻译为专业中文，并按【重磅程度】严格评分排序。
+{role_focus}
+
+请基于以下顶级权威信源（彭博社、金融时报、路透社、WSJ、CNBC、财联社、BBC），合并去重同类事件，将英文报道精准翻译为专业中文，并按【重磅程度】严格评分排序。
 
 【重磅程度评分标准（score，1~5 整数，务必拉开区分度，不要全部打 5 分）】：
-- 5 分（核弹/头版级）：美联储或主要央行重磅政策、CPI/非农/GDP等关键宏观数据、万亿美元科技巨头（英伟达/苹果/微软等）财报或重大突发、关税/地缘重大冲击、或同时被彭博/路透/FT/WSJ多家权威媒体交叉报道的超级事件（全篇通常 2~4 条）。
+- 5 分（核弹/头版级）：美联储或主要央行重磅政策、CPI/非农/GDP等关键宏观数据、万亿美元科技巨头（英伟达/苹果/微软等）财报或重大突发、关税/地缘重大冲击、或同时被多家权威媒体交叉报道的超级事件（全篇通常 2~4 条）。
 - 4 分（主线催化级）：重要产业政策、头部企业并购/重磅新品发布、引发板块集体异动的核心新闻。
 - 3 分（常规参考级）：单一公司常规动态、大行评级观点、局部行业进展。
 
 严格按以下 JSON 格式输出（不要输出任何 Markdown 代码块标记或多余说明）：
 {{
   "mood": "bullish" 或 "bearish" 或 "neutral",
-  "mood_headline": "一句话定调今日市场最核心的主题（22字以内，有刊物头版感）",
-  "overview": "150-200字的今日全景总览。串联隔夜美股核心驱动、宏观利率/政策预期变化，以及今天A股与科技线需要重点关注的催化或风险。",
+  "mood_headline": "一句话定调本时段最核心的主题（22字以内，有刊物头版感）",
+  "overview": "{overview_guide}",
   "us_global_news": [
     {{
       "score": 5,
@@ -276,7 +340,7 @@ def analyze_with_llm(global_fin_raw, cn_fin_raw, general_raw):
       "title": "高信息量中文标题（26字以内）",
       "fact": "核心事实与具体数据（70-110字，保留关键金额、百分比、公司与人物）",
       "impact": "市场逻辑与关联资产/板块影响（35-55字）",
-      "source": "来源与时间（如 彭博市场 · 06:30；若多源交叉可写 彭博/路透 · 06:30）",
+      "source": "来源与时间（如 彭博市场 · 20:30）",
       "link": "提取对应的原始链接，没有则留空"
     }}
   ],
@@ -288,7 +352,7 @@ def analyze_with_llm(global_fin_raw, cn_fin_raw, general_raw):
       "title": "高信息量中文标题（26字以内）",
       "fact": "核心事实与具体数据（70-110字）",
       "impact": "对A股对应板块或个股的催化逻辑（35-55字）",
-      "source": "来源与时间（如 财联社 · 08:05）"
+      "source": "来源与时间（如 财联社 · 15:10）"
     }}
   ],
   "general_news": [
@@ -297,14 +361,14 @@ def analyze_with_llm(global_fin_raw, cn_fin_raw, general_raw):
       "tag": "国际/AI科技/商业/地缘",
       "title": "高信息量中文标题（26字以内）",
       "summary": "完整的事件脉络与核心看点（70-110字，不要只复述标题）",
-      "source": "来源与时间（如 彭博科技 · 05:20）",
+      "source": "来源与时间（如 彭博科技 · 19:20）",
       "link": "提取对应的原始链接，没有则留空"
     }}
   ]
 }}
 
 严格要求：
-1. us_global_news 精选 6 条、cn_a_news 精选 5 条、general_news 精选 4 条，每个列表内按 score 从高到低排列。
+1. 这是每日{brief_type}：us_global_news 精选 6 条、cn_a_news 精选 5 条、general_news 精选 4 条，每个列表内按 score 从高到低排列。
 2. 严禁编造数据或链接，所有事实必须来自下方原始素材。
 
 【全球与美股顶级财经信源】：
@@ -345,7 +409,6 @@ def normalize_and_sort_llm_data(data):
 
 # ================= SVG 走势图与网页渲染引擎 =================
 def render_sparkline_svg(values, stroke_color, grad_id):
-    """基于 7 日收盘价生成高清内联 SVG 迷你走势图（含渐变填充）"""
     if not values or len(values) < 2:
         return ""
     w, h = 68, 22
@@ -357,10 +420,7 @@ def render_sparkline_svg(values, stroke_color, grad_id):
     coords = []
     for i, v in enumerate(values):
         x = (i / (n - 1)) * w
-        if span == 0:
-            y = h / 2
-        else:
-            y = h - pad - ((v - vmin) / span) * (h - pad * 2)
+        y = h / 2 if span == 0 else h - pad - ((v - vmin) / span) * (h - pad * 2)
         coords.append((round(x, 1), round(y, 1)))
 
     poly_pts = " ".join(f"{x},{y}" for x, y in coords)
@@ -383,7 +443,6 @@ def render_sparkline_svg(values, stroke_color, grad_id):
 
 
 def render_ticker_tape_html(all_groups):
-    """生成顶部彭博风格横向滚动行情带"""
     chips = []
     for items, is_us in all_groups:
         for item in items:
@@ -405,7 +464,6 @@ def render_ticker_tape_html(all_groups):
     if not chips:
         return ""
     track = "".join(chips)
-    # 复制一份实现无缝循环滚动
     return f'<div class="ticker-tape"><div class="ticker-track">{track}{track}</div></div>'
 
 
@@ -449,14 +507,13 @@ def render_market_card_html(title, subtitle, data, is_us=True, card_prefix="m"):
     )
 
 
-def render_top_picks_html(llm_data):
-    """在总览下方生成 5★ 重磅头条快速跳转条"""
+def render_top_picks_html(llm_data, edition):
+    sec_map = (
+        [("cn_a_news", "cn", "A股/宏观"), ("us_global_news", "us", "美股/全球"), ("general_news", "gen", "国际/科技")]
+        if edition == "pm"
+        else [("us_global_news", "us", "美股/全球"), ("cn_a_news", "cn", "A股/宏观"), ("general_news", "gen", "国际/科技")]
+    )
     candidates = []
-    sec_map = [
-        ("us_global_news", "us", "美股/全球"),
-        ("cn_a_news", "cn", "A股/宏观"),
-        ("general_news", "gen", "国际/科技"),
-    ]
     for key, prefix, label in sec_map:
         for i, item in enumerate(llm_data.get(key, []), 1):
             candidates.append((item["score"], f"{prefix}-{i}", label, item.get("title", "")))
@@ -481,7 +538,7 @@ def render_top_picks_html(llm_data):
         )
     return (
         '<div class="spotlight-wrap">'
-        '  <div class="spotlight-header">⚡ 今日必读重磅速达（按重要性排序）</div>'
+        '  <div class="spotlight-header">⚡ 本期必读重磅速达（按重要性排序）</div>'
         f'  <div class="spotlight-list">{"".join(links)}</div>'
         '</div>'
     )
@@ -489,7 +546,7 @@ def render_top_picks_html(llm_data):
 
 def render_news_cards_html(items, section_prefix, with_impact=True):
     if not items:
-        return '<div class="news-card"><div class="news-fact">今日暂无重要更新</div></div>'
+        return '<div class="news-card"><div class="news-fact">本时段暂无重要更新</div></div>'
     cards = []
     for i, item in enumerate(items, 1):
         score = safe_score(item.get("score", 3))
@@ -559,30 +616,69 @@ def render_news_cards_html(items, section_prefix, with_impact=True):
     return "\n".join(cards)
 
 
-def build_archive_select_html(dates, current_date, is_archive=False):
-    if not dates:
+def build_archive_select_html(entry_ids, current_id, is_archive=False):
+    if not entry_ids:
         return ""
     prefix = "" if is_archive else "archive/"
     options = []
-    for d in dates:
-        selected = " selected" if d == current_date else ""
-        label = f"{d} (最新)" if d == dates[0] else d
-        target = f"{prefix}{d}.html"
+    for eid in entry_ids:
+        selected = " selected" if eid == current_id else ""
+        label = format_archive_label(eid)
+        if eid == entry_ids[0]:
+            label += " (最新)"
+        target = f"{prefix}{eid}.html"
         options.append(f'<option value="{esc(target)}"{selected}>{esc(label)}</option>')
     return (
-        '<select class="archive-select" aria-label="往期早报" '
+        '<select class="archive-select" aria-label="往期早晚报" '
         'onchange="if(this.value) window.location.href=this.value">'
         + "".join(options)
         + "</select>"
     )
 
 
+def render_news_sections_html(us_news, cn_news, gen_news, edition):
+    """早报优先展示美股/全球，晚报优先展示 A 股/国内宏观"""
+    us_section = (
+        f'<section id="us-global" class="section" data-section="us">'
+        f'  <div class="section-header">'
+        f'    <h2 class="section-title">🇺🇸 {"美股盘前与全球财经" if edition == "pm" else "美股与全球财经"}</h2>'
+        f'    <span class="section-count" data-count-for="us">{len(us_news)} 条精选</span>'
+        f'  </div>'
+        f'  <div class="news-list">{render_news_cards_html(us_news, "us", with_impact=True)}</div>'
+        f'  <div class="empty-hint" data-empty-for="us">当前筛选条件下暂无美股/全球财经新闻</div>'
+        f'</section>'
+    )
+    cn_section = (
+        f'<section id="cn-a" class="section" data-section="cn">'
+        f'  <div class="section-header">'
+        f'    <h2 class="section-title">🇨🇳 {"A 股收盘与国内宏观" if edition == "pm" else "A 股与国内宏观"}</h2>'
+        f'    <span class="section-count" data-count-for="cn">{len(cn_news)} 条精选</span>'
+        f'  </div>'
+        f'  <div class="news-list">{render_news_cards_html(cn_news, "cn", with_impact=True)}</div>'
+        f'  <div class="empty-hint" data-empty-for="cn">当前筛选条件下暂无 A 股/宏观新闻</div>'
+        f'</section>'
+    )
+    gen_section = (
+        f'<section id="general" class="section" data-section="gen">'
+        f'  <div class="section-header">'
+        f'    <h2 class="section-title">🌐 国际时政与前沿科技</h2>'
+        f'    <span class="section-count" data-count-for="gen">{len(gen_news)} 条精选</span>'
+        f'  </div>'
+        f'  <div class="news-list">{render_news_cards_html(gen_news, "gen", with_impact=False)}</div>'
+        f'  <div class="empty-hint" data-empty-for="gen">当前筛选条件下暂无国际/科技新闻</div>'
+        f'</section>'
+    )
+    if edition == "pm":
+        return "\n".join([cn_section, us_section, gen_section])
+    return "\n".join([us_section, cn_section, gen_section])
+
+
 HTML_TEMPLATE = """<!DOCTYPE html>
-<html lang="zh-CN" data-theme="dark">
+<html lang="zh-CN" data-theme="dark" data-edition="__EDITION_CODE__">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>DAILY BRIEF · 全球财经与热点早报 · __DATE_STR__</title>
+  <title>DAILY BRIEF · __FULL_NAME__ · __DATE_STR__</title>
   <style>
     :root {
       --bg: #070b14;
@@ -599,6 +695,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       --text-muted: #64748b;
       --accent: #38bdf8;
       --accent-soft: rgba(56, 189, 248, 0.12);
+      --edition-bg: rgba(245, 158, 11, 0.14);
+      --edition-color: #fbbf24;
       --green: #10b981;
       --green-bg: rgba(16, 185, 129, 0.14);
       --red: #f43f5e;
@@ -611,6 +709,15 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       --font-sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI", sans-serif;
       --font-serif: "Songti SC", "STSong", "Noto Serif CJK SC", "Source Han Serif SC", Georgia, serif;
       --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    }
+
+    [data-edition="pm"] {
+      --bg-glow-1: rgba(139, 92, 246, 0.13);
+      --bg-glow-2: rgba(56, 189, 248, 0.09);
+      --accent: #818cf8;
+      --accent-soft: rgba(129, 140, 248, 0.14);
+      --edition-bg: rgba(139, 92, 246, 0.16);
+      --edition-color: #c4b5fd;
     }
 
     [data-theme="light"] {
@@ -628,6 +735,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       --text-muted: #64748b;
       --accent: #0284c7;
       --accent-soft: rgba(2, 132, 199, 0.1);
+      --edition-bg: rgba(217, 119, 6, 0.12);
+      --edition-color: #b45309;
       --green: #059669;
       --green-bg: rgba(5, 150, 105, 0.1);
       --red: #e11d48;
@@ -637,6 +746,13 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       --breaking-border: rgba(217, 119, 6, 0.48);
       --breaking-glow: 0 10px 26px -12px rgba(217, 119, 6, 0.18);
       --shadow: 0 6px 22px -10px rgba(15, 23, 42, 0.08);
+    }
+
+    [data-theme="light"][data-edition="pm"] {
+      --accent: #4f46e5;
+      --accent-soft: rgba(79, 70, 229, 0.1);
+      --edition-bg: rgba(79, 70, 229, 0.12);
+      --edition-color: #4338ca;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -654,7 +770,6 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       padding-bottom: 80px;
     }
 
-    /* 阅读进度条 */
     .read-progress {
       position: fixed;
       top: 0;
@@ -666,7 +781,6 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       transition: width 0.08s linear;
     }
 
-    /* 顶部滚动行情带 */
     .ticker-tape {
       background: var(--bg-elevated);
       border-bottom: 1px solid var(--border);
@@ -701,13 +815,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     .tape-red { color: var(--red); font-weight: 700; }
     .tape-flat { color: var(--text-muted); }
 
-    .container {
-      max-width: 1040px;
-      margin: 0 auto;
-      padding: 0 22px;
-    }
+    .container { max-width: 1040px; margin: 0 auto; padding: 0 22px; }
 
-    /* 粘性导航栏 */
     .topbar {
       position: sticky;
       top: 0;
@@ -724,13 +833,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       height: 58px;
       gap: 12px;
     }
-    .brand {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      text-decoration: none;
-      color: var(--text);
-    }
+    .brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--text); }
     .brand-mark {
       width: 26px;
       height: 26px;
@@ -742,24 +845,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       font-weight: 800;
       font-size: 13px;
       color: #fff;
-      box-shadow: 0 4px 12px rgba(56, 189, 248, 0.3);
+      box-shadow: 0 4px 12px rgba(56, 189, 248, 0.28);
     }
-    .brand-title {
-      font-weight: 800;
-      font-size: 15px;
-      letter-spacing: 0.6px;
-    }
-    .brand-sub {
-      font-size: 12px;
-      color: var(--text-muted);
-      padding-left: 8px;
-      border-left: 1px solid var(--border);
-    }
-    .controls {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
+    .brand-title { font-weight: 800; font-size: 15px; letter-spacing: 0.6px; }
+    .brand-sub { font-size: 12px; color: var(--text-muted); padding-left: 8px; border-left: 1px solid var(--border); }
+    .controls { display: flex; align-items: center; gap: 8px; }
     .archive-select, .theme-btn {
       background: var(--bg-elevated);
       color: var(--text);
@@ -771,17 +861,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       cursor: pointer;
       transition: all 0.18s;
     }
-    .archive-select:hover, .theme-btn:hover {
-      border-color: var(--border-strong);
-      background: var(--bg-card-hover);
-    }
+    .archive-select:hover, .theme-btn:hover { border-color: var(--border-strong); background: var(--bg-card-hover); }
 
-    /* 报头 Masthead */
-    .hero {
-      padding: 36px 0 24px;
-      border-bottom: 1px solid var(--border);
-      margin-bottom: 24px;
-    }
+    .hero { padding: 34px 0 24px; border-bottom: 1px solid var(--border); margin-bottom: 24px; }
     .hero-top {
       display: flex;
       flex-wrap: wrap;
@@ -789,6 +871,23 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       justify-content: space-between;
       gap: 10px;
       margin-bottom: 14px;
+    }
+    .hero-meta-left {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+    }
+    .edition-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      background: var(--edition-bg);
+      color: var(--edition-color);
     }
     .hero-date {
       display: inline-flex;
@@ -798,13 +897,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       color: var(--text-secondary);
       font-family: var(--font-mono);
     }
-    .live-dot {
-      width: 7px;
-      height: 7px;
-      border-radius: 50%;
-      background: var(--green);
-      box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.18);
-    }
+    .live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.18); }
     .mood-pill {
       display: inline-flex;
       align-items: center;
@@ -813,7 +906,6 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       border-radius: 999px;
       font-size: 12px;
       font-weight: 700;
-      letter-spacing: 0.2px;
     }
     .mood-bullish { background: var(--red-bg); color: var(--red); border: 1px solid rgba(244, 63, 94, 0.25); }
     .mood-bearish { background: var(--green-bg); color: var(--green); border: 1px solid rgba(16, 185, 129, 0.25); }
@@ -826,14 +918,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       letter-spacing: -0.3px;
       line-height: 1.32;
       margin-bottom: 18px;
-      color: var(--text);
     }
 
-    .quick-nav {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-    }
+    .quick-nav { display: flex; flex-wrap: wrap; gap: 8px; }
     .quick-nav a {
       text-decoration: none;
       font-size: 13px;
@@ -845,13 +932,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       border-radius: 999px;
       transition: all 0.18s;
     }
-    .quick-nav a:hover {
-      color: var(--accent);
-      border-color: var(--accent);
-      transform: translateY(-1px);
-    }
+    .quick-nav a:hover { color: var(--accent); border-color: var(--accent); transform: translateY(-1px); }
 
-    /* 2x2 终端行情看板（含 SVG Sparkline） */
     .market-grid {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -871,7 +953,6 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       font-size: 13px;
       font-weight: 700;
       color: var(--text-secondary);
-      letter-spacing: 0.4px;
       margin-bottom: 12px;
       padding-bottom: 8px;
       border-bottom: 1px solid var(--border);
@@ -879,14 +960,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       align-items: center;
       justify-content: space-between;
     }
-    .market-card-sub {
-      font-size: 11px;
-      font-weight: 500;
-      color: var(--text-muted);
-      background: var(--bg-subtle);
-      padding: 2px 7px;
-      border-radius: 5px;
-    }
+    .market-card-sub { font-size: 11px; font-weight: 500; color: var(--text-muted); background: var(--bg-subtle); padding: 2px 7px; border-radius: 5px; }
     .market-row {
       display: grid;
       grid-template-columns: 1fr auto auto;
@@ -896,56 +970,18 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       border-bottom: 1px dashed var(--border);
     }
     .market-row:last-child { border-bottom: none; padding-bottom: 0; }
-    .ticker-left {
-      display: flex;
-      flex-direction: column;
-      min-width: 0;
-    }
-    .ticker-name {
-      font-size: 14px;
-      font-weight: 600;
-      color: var(--text);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    .ticker-sym {
-      font-family: var(--font-mono);
-      font-size: 10.5px;
-      color: var(--text-muted);
-    }
-    .ticker-mid {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
+    .ticker-left { display: flex; flex-direction: column; min-width: 0; }
+    .ticker-name { font-size: 14px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .ticker-sym { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-muted); }
+    .ticker-mid { display: flex; align-items: center; justify-content: center; }
     .sparkline { display: block; overflow: visible; }
-    .ticker-right {
-      display: flex;
-      align-items: center;
-      justify-content: flex-end;
-      gap: 9px;
-      font-family: var(--font-mono);
-      font-variant-numeric: tabular-nums;
-    }
-    .ticker-price {
-      font-size: 14px;
-      font-weight: 700;
-      color: var(--text);
-    }
-    .pct-badge {
-      min-width: 72px;
-      text-align: right;
-      font-size: 12px;
-      font-weight: 700;
-      padding: 3px 8px;
-      border-radius: 7px;
-    }
+    .ticker-right { display: flex; align-items: center; justify-content: flex-end; gap: 9px; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+    .ticker-price { font-size: 14px; font-weight: 700; color: var(--text); }
+    .pct-badge { min-width: 72px; text-align: right; font-size: 12px; font-weight: 700; padding: 3px 8px; border-radius: 7px; }
     .pct-green { color: var(--green); background: var(--green-bg); }
     .pct-red { color: var(--red); background: var(--red-bg); }
     .pct-flat { color: var(--text-secondary); background: var(--bg-subtle); }
 
-    /* 主编总览 + 重磅速达 */
     .overview-box {
       background: linear-gradient(145deg, var(--bg-card) 0%, var(--bg-elevated) 100%);
       border: 1px solid var(--border);
@@ -965,39 +1001,12 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       width: 4px;
       background: linear-gradient(180deg, var(--accent), #818cf8);
     }
-    .overview-label {
-      font-size: 13px;
-      font-weight: 800;
-      color: var(--accent);
-      letter-spacing: 0.6px;
-      margin-bottom: 10px;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-    .overview-text {
-      font-size: 15.5px;
-      color: var(--text);
-      line-height: 1.85;
-    }
+    .overview-label { font-size: 13px; font-weight: 800; color: var(--accent); letter-spacing: 0.6px; margin-bottom: 10px; }
+    .overview-text { font-size: 15.5px; color: var(--text); line-height: 1.85; }
 
-    .spotlight-wrap {
-      margin-top: 18px;
-      padding-top: 16px;
-      border-top: 1px solid var(--border);
-    }
-    .spotlight-header {
-      font-size: 12px;
-      font-weight: 700;
-      color: var(--amber);
-      letter-spacing: 0.4px;
-      margin-bottom: 10px;
-    }
-    .spotlight-list {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 8px;
-    }
+    .spotlight-wrap { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border); }
+    .spotlight-header { font-size: 12px; font-weight: 700; color: var(--amber); letter-spacing: 0.4px; margin-bottom: 10px; }
+    .spotlight-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
     .spotlight-item {
       display: flex;
       align-items: center;
@@ -1012,36 +1021,12 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       transition: all 0.16s;
       min-width: 0;
     }
-    .spotlight-item:hover {
-      border-color: var(--amber);
-      background: var(--amber-bg);
-      transform: translateX(2px);
-    }
-    .spotlight-badge {
-      font-family: var(--font-mono);
-      font-size: 11px;
-      font-weight: 700;
-      color: var(--amber);
-      white-space: nowrap;
-    }
-    .spotlight-sec {
-      font-size: 11px;
-      color: var(--text-muted);
-      white-space: nowrap;
-    }
-    .spotlight-title {
-      flex: 1;
-      font-weight: 600;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    .spotlight-arrow {
-      color: var(--text-muted);
-      font-size: 12px;
-    }
+    .spotlight-item:hover { border-color: var(--amber); background: var(--amber-bg); transform: translateX(2px); }
+    .spotlight-badge { font-family: var(--font-mono); font-size: 11px; font-weight: 700; color: var(--amber); white-space: nowrap; }
+    .spotlight-sec { font-size: 11px; color: var(--text-muted); white-space: nowrap; }
+    .spotlight-title { flex: 1; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .spotlight-arrow { color: var(--text-muted); font-size: 12px; }
 
-    /* 交互式筛选与搜索工具栏 */
     .filter-bar {
       display: flex;
       flex-wrap: wrap;
@@ -1055,11 +1040,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       border-radius: 14px;
       box-shadow: var(--shadow);
     }
-    .filter-pills {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-    }
+    .filter-pills { display: flex; flex-wrap: wrap; gap: 6px; }
     .filter-btn {
       background: var(--bg-subtle);
       color: var(--text-secondary);
@@ -1072,17 +1053,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       transition: all 0.16s;
     }
     .filter-btn:hover { color: var(--text); border-color: var(--border-strong); }
-    .filter-btn.active {
-      background: var(--accent);
-      color: #ffffff;
-      border-color: var(--accent);
-      box-shadow: 0 4px 12px rgba(56, 189, 248, 0.25);
-    }
-    .search-box {
-      position: relative;
-      flex: 0 1 240px;
-      min-width: 180px;
-    }
+    .filter-btn.active { background: var(--accent); color: #ffffff; border-color: var(--accent); }
+    .search-box { position: relative; flex: 0 1 240px; min-width: 180px; }
     .search-input {
       width: 100%;
       background: var(--bg-elevated);
@@ -1092,24 +1064,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       padding: 6px 14px 6px 32px;
       font-size: 12.5px;
       outline: none;
-      transition: border-color 0.18s;
     }
     .search-input:focus { border-color: var(--accent); }
-    .search-icon {
-      position: absolute;
-      left: 11px;
-      top: 50%;
-      transform: translateY(-50%);
-      font-size: 12px;
-      color: var(--text-muted);
-      pointer-events: none;
-    }
+    .search-icon { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); font-size: 12px; color: var(--text-muted); pointer-events: none; }
 
-    /* 新闻分区 */
-    .section {
-      margin-bottom: 38px;
-      scroll-margin-top: 76px;
-    }
+    .section { margin-bottom: 38px; scroll-margin-top: 76px; }
     .section-header {
       display: flex;
       align-items: center;
@@ -1118,44 +1077,20 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       padding-bottom: 10px;
       border-bottom: 1px solid var(--border);
     }
-    .section-title {
-      font-family: var(--font-serif);
-      font-size: 20px;
-      font-weight: 800;
-      display: flex;
-      align-items: center;
-      gap: 9px;
-      letter-spacing: 0.2px;
-    }
-    .section-count {
-      font-family: var(--font-mono);
-      font-size: 12px;
-      color: var(--text-muted);
-      background: var(--bg-elevated);
-      border: 1px solid var(--border);
-      padding: 3px 10px;
-      border-radius: 999px;
-    }
+    .section-title { font-family: var(--font-serif); font-size: 20px; font-weight: 800; display: flex; align-items: center; gap: 9px; }
+    .section-count { font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); background: var(--bg-elevated); border: 1px solid var(--border); padding: 3px 10px; border-radius: 999px; }
 
-    .news-list {
-      display: grid;
-      gap: 15px;
-    }
+    .news-list { display: grid; gap: 15px; }
     .news-card {
       background: var(--bg-card);
       border: 1px solid var(--border);
       border-radius: 16px;
       padding: 20px 22px;
-      transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+      transition: transform 0.2s ease, border-color 0.2s ease;
       box-shadow: var(--shadow);
       scroll-margin-top: 84px;
     }
-    .news-card:hover {
-      transform: translateY(-2px);
-      border-color: var(--border-strong);
-      background: var(--bg-card-hover);
-    }
-    /* 5★ 重磅头条专属高亮 */
+    .news-card:hover { transform: translateY(-2px); border-color: var(--border-strong); background: var(--bg-card-hover); }
     .news-card.is-breaking {
       border-color: var(--breaking-border);
       box-shadow: var(--breaking-glow);
@@ -1163,70 +1098,20 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     }
     .news-card.is-hidden { display: none; }
 
-    .news-top {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 8px;
-      margin-bottom: 10px;
-    }
-    .news-idx {
-      font-family: var(--font-mono);
-      font-size: 12px;
-      font-weight: 700;
-      color: var(--text-muted);
-    }
-    .breaking-pill {
-      font-size: 11.5px;
-      font-weight: 800;
-      padding: 2px 9px;
-      border-radius: 6px;
-      background: var(--amber-bg);
-      color: var(--amber);
-      border: 1px solid rgba(245, 158, 11, 0.32);
-    }
-    .score-pill {
-      font-size: 11.5px;
-      letter-spacing: 1px;
-      padding: 2px 7px;
-      border-radius: 6px;
-      background: var(--bg-subtle);
-      border: 1px solid var(--border);
-    }
+    .news-top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 10px; }
+    .news-idx { font-family: var(--font-mono); font-size: 12px; font-weight: 700; color: var(--text-muted); }
+    .breaking-pill { font-size: 11.5px; font-weight: 800; padding: 2px 9px; border-radius: 6px; background: var(--amber-bg); color: var(--amber); border: 1px solid rgba(245, 158, 11, 0.32); }
+    .score-pill { font-size: 11.5px; letter-spacing: 1px; padding: 2px 7px; border-radius: 6px; background: var(--bg-subtle); border: 1px solid var(--border); }
     .stars-on { color: var(--amber); }
     .stars-off { color: var(--text-muted); opacity: 0.45; }
-
-    .tag-pill {
-      font-size: 11.5px;
-      font-weight: 600;
-      padding: 2px 9px;
-      border-radius: 6px;
-      background: var(--accent-soft);
-      color: var(--accent);
-    }
-    .sent-pill {
-      font-size: 11.5px;
-      font-weight: 700;
-      padding: 2px 9px;
-      border-radius: 6px;
-    }
+    .tag-pill { font-size: 11.5px; font-weight: 600; padding: 2px 9px; border-radius: 6px; background: var(--accent-soft); color: var(--accent); }
+    .sent-pill { font-size: 11.5px; font-weight: 700; padding: 2px 9px; border-radius: 6px; }
     .sent-bull { background: var(--red-bg); color: var(--red); }
     .sent-bear { background: var(--green-bg); color: var(--green); }
     .sent-neu { background: var(--bg-subtle); color: var(--text-secondary); }
 
-    .news-title {
-      font-size: 17.5px;
-      font-weight: 700;
-      line-height: 1.45;
-      margin-bottom: 9px;
-      color: var(--text);
-    }
-    .news-fact {
-      font-size: 14.8px;
-      color: var(--text-secondary);
-      line-height: 1.8;
-      margin-bottom: 12px;
-    }
+    .news-title { font-size: 17.5px; font-weight: 700; line-height: 1.45; margin-bottom: 9px; color: var(--text); }
+    .news-fact { font-size: 14.8px; color: var(--text-secondary); line-height: 1.8; margin-bottom: 12px; }
     .news-impact {
       display: flex;
       align-items: baseline;
@@ -1240,53 +1125,16 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       margin-bottom: 13px;
       line-height: 1.65;
     }
-    .impact-label {
-      font-size: 11.5px;
-      font-weight: 800;
-      color: var(--accent);
-      background: var(--accent-soft);
-      padding: 1px 7px;
-      border-radius: 5px;
-      white-space: nowrap;
-    }
-    .news-footer {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 10px;
-      font-size: 12.5px;
-      color: var(--text-muted);
-      padding-top: 10px;
-      border-top: 1px solid var(--border);
-    }
+    .impact-label { font-size: 11.5px; font-weight: 800; color: var(--accent); background: var(--accent-soft); padding: 1px 7px; border-radius: 5px; white-space: nowrap; }
+    .news-footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 12.5px; color: var(--text-muted); padding-top: 10px; border-top: 1px solid var(--border); }
     .source-meta { font-family: var(--font-mono); font-size: 12px; }
-    .source-link {
-      color: var(--accent);
-      text-decoration: none;
-      font-weight: 600;
-      padding: 3px 10px;
-      border-radius: 999px;
-      background: var(--accent-soft);
-      transition: all 0.16s;
-    }
-    .source-link:hover {
-      background: var(--accent);
-      color: #fff;
-    }
+    .source-link { color: var(--accent); text-decoration: none; font-weight: 600; padding: 3px 10px; border-radius: 999px; background: var(--accent-soft); transition: all 0.16s; }
+    .source-link:hover { background: var(--accent); color: #fff; }
     .source-nolink { font-size: 11.5px; opacity: 0.65; }
 
-    .empty-hint {
-      display: none;
-      text-align: center;
-      padding: 28px 16px;
-      color: var(--text-muted);
-      font-size: 13.5px;
-      border: 1px dashed var(--border);
-      border-radius: 14px;
-    }
+    .empty-hint { display: none; text-align: center; padding: 28px 16px; color: var(--text-muted); font-size: 13.5px; border: 1px dashed var(--border); border-radius: 14px; }
     .empty-hint.show { display: block; }
 
-    /* 返回顶部 */
     .back-top {
       position: fixed;
       right: 22px;
@@ -1308,14 +1156,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     .back-top.visible { opacity: 1; pointer-events: auto; }
     .back-top:hover { border-color: var(--accent); color: var(--accent); transform: translateY(-2px); }
 
-    footer {
-      text-align: center;
-      font-size: 12.5px;
-      color: var(--text-muted);
-      padding-top: 28px;
-      border-top: 1px solid var(--border);
-      line-height: 1.9;
-    }
+    footer { text-align: center; font-size: 12.5px; color: var(--text-muted); padding-top: 28px; border-top: 1px solid var(--border); line-height: 1.9; }
 
     @media (max-width: 760px) {
       .market-grid { grid-template-columns: 1fr; }
@@ -1338,7 +1179,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       <a class="brand" href="__HOME_LINK__">
         <span class="brand-mark">DB</span>
         <span class="brand-title">DAILY BRIEF</span>
-        <span class="brand-sub">全球财经与热点终端</span>
+        <span class="brand-sub">早晚报双推终端</span>
       </a>
       <div class="controls">
         __ARCHIVE_SELECT__
@@ -1350,18 +1191,18 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   <main class="container">
     <section class="hero">
       <div class="hero-top">
-        <span class="hero-date">
-          <span class="live-dot"></span>
-          <span>__DATE_FULL__ __WEEKDAY__ · __GEN_TIME__ CST</span>
-        </span>
+        <div class="hero-meta-left">
+          <span class="edition-pill">__EDITION_BADGE__</span>
+          <span class="hero-date">
+            <span class="live-dot"></span>
+            <span>__DATE_FULL__ __WEEKDAY__ · __GEN_TIME__ CST</span>
+          </span>
+        </div>
         <span class="mood-pill __MOOD_CLASS__">__MOOD_LABEL__</span>
       </div>
       <h1>__MOOD_HEADLINE__</h1>
       <nav class="quick-nav">
-        <a href="#markets">📊 跨市场行情</a>
-        <a href="#us-global">🇺🇸 美股与全球财经</a>
-        <a href="#cn-a">🇨🇳 A股与国内宏观</a>
-        <a href="#general">🌐 国际时政与科技</a>
+        __QUICK_NAV__
       </nav>
     </section>
 
@@ -1370,7 +1211,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     </section>
 
     <section class="overview-box">
-      <div class="overview-label">🧭 今日主编全景总览</div>
+      <div class="overview-label">🧭 __OVERVIEW_TITLE__</div>
       <div class="overview-text">__OVERVIEW__</div>
       __TOP_PICKS_HTML__
     </section>
@@ -1388,42 +1229,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       </div>
     </div>
 
-    <section id="us-global" class="section" data-section="us">
-      <div class="section-header">
-        <h2 class="section-title">🇺🇸 美股与全球财经</h2>
-        <span class="section-count" data-count-for="us">__US_COUNT__ 条精选</span>
-      </div>
-      <div class="news-list">
-        __US_NEWS_HTML__
-      </div>
-      <div class="empty-hint" data-empty-for="us">当前筛选条件下暂无美股/全球财经新闻</div>
-    </section>
-
-    <section id="cn-a" class="section" data-section="cn">
-      <div class="section-header">
-        <h2 class="section-title">🇨🇳 A 股与国内宏观</h2>
-        <span class="section-count" data-count-for="cn">__CN_COUNT__ 条精选</span>
-      </div>
-      <div class="news-list">
-        __CN_NEWS_HTML__
-      </div>
-      <div class="empty-hint" data-empty-for="cn">当前筛选条件下暂无 A 股/宏观新闻</div>
-    </section>
-
-    <section id="general" class="section" data-section="gen">
-      <div class="section-header">
-        <h2 class="section-title">🌐 国际时政与前沿科技</h2>
-        <span class="section-count" data-count-for="gen">__GEN_COUNT__ 条精选</span>
-      </div>
-      <div class="news-list">
-        __GEN_NEWS_HTML__
-      </div>
-      <div class="empty-hint" data-empty-for="gen">当前筛选条件下暂无国际/科技新闻</div>
-    </section>
+    __NEWS_SECTIONS__
 
     <footer>
-      <div>权威信源：Bloomberg · Financial Times · Reuters · WSJ · CNBC · 财联社 · BBC（严格 24h 时效过滤 · 按重磅程度排序）</div>
-      <div>精准行情：Yahoo Finance &amp; 东方财富（代码直出，零模型幻觉） · 每日定时生成于 GitHub Actions</div>
+      <div>权威信源：Bloomberg · Financial Times · Reuters · WSJ · CNBC · 财联社 · BBC（按重磅程度排序）</div>
+      <div>精准行情：Yahoo Finance &amp; 东方财富（代码直出，零模型幻觉） · 早报 08:30 / 晚报 22:00 自动推送</div>
     </footer>
   </main>
 
@@ -1431,7 +1241,6 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
   <script>
     (function () {
-      // 1. 主题切换
       const root = document.documentElement;
       const themeBtn = document.getElementById("themeToggle");
       const saved = localStorage.getItem("brief-theme") || "dark";
@@ -1446,7 +1255,6 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         applyTheme(next);
       });
 
-      // 2. 阅读进度条 & 返回顶部
       const progressEl = document.getElementById("readProgress");
       const backTopBtn = document.getElementById("backTop");
       window.addEventListener("scroll", function () {
@@ -1460,7 +1268,6 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         window.scrollTo({ top: 0, behavior: "smooth" });
       });
 
-      // 3. 实时筛选与关键词搜索
       let activeFilter = "all";
       const filterBtns = document.querySelectorAll(".filter-btn");
       const searchInput = document.getElementById("searchInput");
@@ -1512,8 +1319,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 """
 
 
-def render_page_html(now, us_idx, tech_stocks, a_idx, macro_assets, llm_data, archive_dates, is_archive=False):
+def render_page_html(now, edition, us_idx, tech_stocks, a_idx, macro_assets, llm_data, archive_ids, is_archive=False):
+    meta = get_edition_meta(edition)
     date_str = now.strftime("%Y-%m-%d")
+    edition_id = f"{date_str}-{edition}"
     date_full = now.strftime("%Y年%m月%d日")
     weekday = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"][now.weekday()]
 
@@ -1523,46 +1332,63 @@ def render_page_html(now, us_idx, tech_stocks, a_idx, macro_assets, llm_data, ar
         "bearish": ("mood-bearish", "❄️ 市场情绪偏谨慎"),
         "neutral": ("mood-neutral", "⚖️ 震荡分化格局"),
     }
-    mood_cls, mood_label = mood_map.get(mood, ("mood-neutral", "📊 每日早报"))
+    mood_cls, mood_label = mood_map.get(mood, ("mood-neutral", f"📊 每日{meta['name']}"))
 
-    ticker_tape = render_ticker_tape_html([
-        (us_idx, True),
-        (tech_stocks, True),
-        (a_idx, False),
-        (macro_assets, True),
-    ])
-
-    market_cards = "\n".join([
-        render_market_card_html("🇺🇸 隔夜美股指数", "绿涨红跌 · 7日趋势", us_idx, is_us=True, card_prefix="us"),
-        render_market_card_html("🚀 美股科技风向", "绿涨红跌 · 7日趋势", tech_stocks, is_us=True, card_prefix="tk"),
-        render_market_card_html("🇨🇳 A 股核心收盘", "红涨绿跌 · 7日趋势", a_idx, is_us=False, card_prefix="cn"),
-        render_market_card_html("🌍 大宗 · 加密 · 汇率", "绿涨红跌 · 7日趋势", macro_assets, is_us=True, card_prefix="mc"),
-    ])
+    if edition == "pm":
+        tape_groups = [(a_idx, False), (us_idx, True), (tech_stocks, True), (macro_assets, True)]
+        market_cards = "\n".join([
+            render_market_card_html(meta["a_card_title"], "红涨绿跌 · 7日趋势", a_idx, is_us=False, card_prefix="cn"),
+            render_market_card_html("🌍 大宗 · 加密 · 汇率", "绿涨红跌 · 7日趋势", macro_assets, is_us=True, card_prefix="mc"),
+            render_market_card_html(meta["us_card_title"], "绿涨红跌 · 7日趋势", us_idx, is_us=True, card_prefix="us"),
+            render_market_card_html("🚀 美股科技风向", "绿涨红跌 · 7日趋势", tech_stocks, is_us=True, card_prefix="tk"),
+        ])
+        quick_nav = (
+            '<a href="#markets">📊 跨市场行情</a>'
+            '<a href="#cn-a">🇨🇳 A股收盘与宏观</a>'
+            '<a href="#us-global">🇺🇸 美股盘前与全球</a>'
+            '<a href="#general">🌐 国际时政与科技</a>'
+        )
+        overview_title = "今日晚报复盘与美股前瞻"
+    else:
+        tape_groups = [(us_idx, True), (tech_stocks, True), (a_idx, False), (macro_assets, True)]
+        market_cards = "\n".join([
+            render_market_card_html(meta["us_card_title"], "绿涨红跌 · 7日趋势", us_idx, is_us=True, card_prefix="us"),
+            render_market_card_html("🚀 美股科技风向", "绿涨红跌 · 7日趋势", tech_stocks, is_us=True, card_prefix="tk"),
+            render_market_card_html(meta["a_card_title"], "红涨绿跌 · 7日趋势", a_idx, is_us=False, card_prefix="cn"),
+            render_market_card_html("🌍 大宗 · 加密 · 汇率", "绿涨红跌 · 7日趋势", macro_assets, is_us=True, card_prefix="mc"),
+        ])
+        quick_nav = (
+            '<a href="#markets">📊 跨市场行情</a>'
+            '<a href="#us-global">🇺🇸 美股与全球财经</a>'
+            '<a href="#cn-a">🇨🇳 A股与国内宏观</a>'
+            '<a href="#general">🌐 国际时政与科技</a>'
+        )
+        overview_title = "今日早报主编全景总览"
 
     us_news = llm_data.get("us_global_news", [])
     cn_news = llm_data.get("cn_a_news", [])
     gen_news = llm_data.get("general_news", [])
 
     replacements = {
+        "__EDITION_CODE__": edition,
+        "__FULL_NAME__": esc(meta["full_name"]),
+        "__EDITION_BADGE__": esc(meta["badge_text"]),
         "__DATE_STR__": esc(date_str),
         "__DATE_FULL__": esc(date_full),
         "__WEEKDAY__": esc(weekday),
         "__GEN_TIME__": esc(now.strftime("%H:%M")),
         "__MOOD_CLASS__": mood_cls,
         "__MOOD_LABEL__": esc(mood_label),
-        "__MOOD_HEADLINE__": esc(llm_data.get("mood_headline") or f"{date_full} 全球财经与热点早报"),
+        "__MOOD_HEADLINE__": esc(llm_data.get("mood_headline") or f"{date_full} {meta['full_name']}"),
         "__HOME_LINK__": "../index.html" if is_archive else "index.html",
-        "__ARCHIVE_SELECT__": build_archive_select_html(archive_dates, date_str, is_archive=is_archive),
-        "__TICKER_TAPE__": ticker_tape,
+        "__ARCHIVE_SELECT__": build_archive_select_html(archive_ids, edition_id, is_archive=is_archive),
+        "__TICKER_TAPE__": render_ticker_tape_html(tape_groups),
+        "__QUICK_NAV__": quick_nav,
         "__MARKET_CARDS__": market_cards,
+        "__OVERVIEW_TITLE__": esc(overview_title),
         "__OVERVIEW__": esc(llm_data.get("overview", "")),
-        "__TOP_PICKS_HTML__": render_top_picks_html(llm_data),
-        "__US_COUNT__": str(len(us_news)),
-        "__CN_COUNT__": str(len(cn_news)),
-        "__GEN_COUNT__": str(len(gen_news)),
-        "__US_NEWS_HTML__": render_news_cards_html(us_news, "us", with_impact=True),
-        "__CN_NEWS_HTML__": render_news_cards_html(cn_news, "cn", with_impact=True),
-        "__GEN_NEWS_HTML__": render_news_cards_html(gen_news, "gen", with_impact=False),
+        "__TOP_PICKS_HTML__": render_top_picks_html(llm_data, edition),
+        "__NEWS_SECTIONS__": render_news_sections_html(us_news, cn_news, gen_news, edition),
     }
     page = HTML_TEMPLATE
     for k, v in replacements.items():
@@ -1570,32 +1396,34 @@ def render_page_html(now, us_idx, tech_stocks, a_idx, macro_assets, llm_data, ar
     return page
 
 
-def save_web_pages(now, us_idx, tech_stocks, a_idx, macro_assets, llm_data):
-    """生成 docs/index.html 与 docs/archive/YYYY-MM-DD.html"""
+def save_web_pages(now, edition, us_idx, tech_stocks, a_idx, macro_assets, llm_data):
+    """生成 docs/index.html 与独立的 docs/archive/YYYY-MM-DD-am|pm.html"""
     DOCS_DIR.mkdir(parents=True, exist_ok=True)
     ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)
 
-    date_str = now.strftime("%Y-%m-%d")
+    edition_id = f"{now.strftime('%Y-%m-%d')}-{edition}"
     manifest_file = ARCHIVE_DIR / "manifest.json"
-    dates = []
+    entries = []
     if manifest_file.exists():
         try:
-            dates = json.loads(manifest_file.read_text(encoding="utf-8"))
+            entries = json.loads(manifest_file.read_text(encoding="utf-8"))
         except Exception:
-            dates = []
+            entries = []
 
-    if date_str not in dates:
-        dates.append(date_str)
-    dates = sorted(set(dates), reverse=True)[:60]
-    manifest_file.write_text(json.dumps(dates, ensure_ascii=False, indent=2), encoding="utf-8")
+    if edition_id not in entries:
+        entries.append(edition_id)
+    # 倒序排列：同一天 pm 自动排在 am 之前，保留最近 120 期（约 60 天早晚报）
+    entries = sorted(set(entries), reverse=True)[:120]
+    manifest_file.write_text(json.dumps(entries, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    index_html = render_page_html(now, us_idx, tech_stocks, a_idx, macro_assets, llm_data, dates, is_archive=False)
-    archive_html = render_page_html(now, us_idx, tech_stocks, a_idx, macro_assets, llm_data, dates, is_archive=True)
+    index_html = render_page_html(now, edition, us_idx, tech_stocks, a_idx, macro_assets, llm_data, entries, is_archive=False)
+    archive_html = render_page_html(now, edition, us_idx, tech_stocks, a_idx, macro_assets, llm_data, entries, is_archive=True)
 
     (DOCS_DIR / "index.html").write_text(index_html, encoding="utf-8")
-    (ARCHIVE_DIR / f"{date_str}.html").write_text(archive_html, encoding="utf-8")
+    (ARCHIVE_DIR / f"{edition_id}.html").write_text(archive_html, encoding="utf-8")
     (DOCS_DIR / ".nojekyll").write_text("", encoding="utf-8")
-    print(f"已生成网页版早报：docs/index.html 与 docs/archive/{date_str}.html")
+    print(f"已生成网页：docs/index.html 与 docs/archive/{edition_id}.html")
+    return edition_id
 
 
 # ================= 飞书精简入口卡片 =================
@@ -1614,19 +1442,19 @@ def format_market_md(data, is_us=False):
     return "\n".join(lines)
 
 
-def build_feishu_summary_card(now, us_idx, tech_stocks, a_idx, macro_assets, llm_data, site_url):
-    """构建精致、不刷屏的飞书入口卡片（按重磅分摘取全网 Top 5）"""
+def build_feishu_summary_card(now, edition, edition_id, us_idx, tech_stocks, a_idx, macro_assets, llm_data, site_url):
+    """构建早/晚报专属飞书精简入口卡片（直链独立归档页，避免晚报覆盖早报链接）"""
+    meta = get_edition_meta(edition)
     today_str = now.strftime("%Y年%m月%d日")
     weekday = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"][now.weekday()]
 
     mood_map = {
         "bullish": ("red", "🔥 风险偏好回升"),
         "bearish": ("green", "❄️ 市场情绪偏谨慎"),
-        "neutral": ("blue", "⚖️ 震荡分化格局"),
+        "neutral": ("indigo" if edition == "pm" else "blue", "⚖️ 震荡分化格局"),
     }
-    header_color, mood_label = mood_map.get(llm_data.get("mood", "neutral"), ("blue", "📊 每日早报"))
+    header_color, mood_label = mood_map.get(llm_data.get("mood", "neutral"), ("blue", f"📊 每日{meta['name']}"))
 
-    # 汇总所有板块新闻，按重磅分数倒序抽取前 5 条作为抢先看
     merged = []
     for key in ("us_global_news", "cn_a_news", "general_news"):
         for item in llm_data.get(key, []):
@@ -1637,10 +1465,19 @@ def build_feishu_summary_card(now, us_idx, tech_stocks, a_idx, macro_assets, llm
     for item in merged[:5]:
         sc = safe_score(item.get("score", 3))
         prefix = "🔥" if sc >= 5 else "•"
-        tag = item.get("tag", "要闻")
-        title = item.get("title", "")
-        preview_lines.append(f"{prefix} **[{tag}]** {title}")
+        preview_lines.append(f"{prefix} **[{item.get('tag', '要闻')}]** {item.get('title', '')}")
     preview_md = "\n".join(preview_lines)
+
+    if edition == "pm":
+        row1_left = (f"🇨🇳 **A 股今日收盘**\n{format_market_md(a_idx, is_us=False)}")
+        row1_right = (f"🌍 **大宗与加密**\n{format_market_md(macro_assets, is_us=True)}")
+        row2_left = (f"🇺🇸 **美股指数**\n{format_market_md(us_idx, is_us=True)}")
+        row2_right = (f"🚀 **焦点科技**\n{format_market_md(tech_stocks, is_us=True)}")
+    else:
+        row1_left = (f"🇺🇸 **隔夜美股**\n{format_market_md(us_idx, is_us=True)}")
+        row1_right = (f"🚀 **焦点科技**\n{format_market_md(tech_stocks, is_us=True)}")
+        row2_left = (f"🇨🇳 **A 股收盘**\n{format_market_md(a_idx, is_us=False)}")
+        row2_right = (f"🌍 **大宗与加密**\n{format_market_md(macro_assets, is_us=True)}")
 
     elements = [
         {
@@ -1648,18 +1485,8 @@ def build_feishu_summary_card(now, us_idx, tech_stocks, a_idx, macro_assets, llm
             "flex_mode": "bisect",
             "background_style": "grey",
             "columns": [
-                {
-                    "tag": "column",
-                    "width": "weighted",
-                    "weight": 1,
-                    "elements": [{"tag": "markdown", "content": f"🇺🇸 **美股指数**\n{format_market_md(us_idx, is_us=True)}"}],
-                },
-                {
-                    "tag": "column",
-                    "width": "weighted",
-                    "weight": 1,
-                    "elements": [{"tag": "markdown", "content": f"🚀 **焦点科技**\n{format_market_md(tech_stocks, is_us=True)}"}],
-                },
+                {"tag": "column", "width": "weighted", "weight": 1, "elements": [{"tag": "markdown", "content": row1_left}]},
+                {"tag": "column", "width": "weighted", "weight": 1, "elements": [{"tag": "markdown", "content": row1_right}]},
             ],
         },
         {
@@ -1667,51 +1494,43 @@ def build_feishu_summary_card(now, us_idx, tech_stocks, a_idx, macro_assets, llm
             "flex_mode": "bisect",
             "background_style": "grey",
             "columns": [
-                {
-                    "tag": "column",
-                    "width": "weighted",
-                    "weight": 1,
-                    "elements": [{"tag": "markdown", "content": f"🇨🇳 **A 股收盘**\n{format_market_md(a_idx, is_us=False)}"}],
-                },
-                {
-                    "tag": "column",
-                    "width": "weighted",
-                    "weight": 1,
-                    "elements": [{"tag": "markdown", "content": f"🌍 **大宗与加密**\n{format_market_md(macro_assets, is_us=True)}"}],
-                },
+                {"tag": "column", "width": "weighted", "weight": 1, "elements": [{"tag": "markdown", "content": row2_left}]},
+                {"tag": "column", "width": "weighted", "weight": 1, "elements": [{"tag": "markdown", "content": row2_right}]},
             ],
         },
         {"tag": "hr"},
         {
             "tag": "markdown",
-            "content": f"🧭 **{llm_data.get('mood_headline', '今日核心总览')}**  ·  {mood_label}\n\n{llm_data.get('overview', '')}",
+            "content": f"🧭 **{llm_data.get('mood_headline', '本期核心总览')}**  ·  {mood_label}\n\n{llm_data.get('overview', '')}",
         },
         {"tag": "hr"},
         {
             "tag": "markdown",
-            "content": f"📌 **全网重磅 Top 5 抢先看**\n{preview_md}",
+            "content": f"📌 **本期重磅 Top 5 抢先看**\n{preview_md}",
         },
     ]
 
     if site_url:
+        target_url = f"{site_url}archive/{edition_id}.html"
         elements.append({
             "tag": "action",
             "actions": [
                 {
                     "tag": "button",
-                    "text": {"tag": "plain_text", "content": "📖 打开旗舰网页版早报（含走势图与筛选）"},
+                    "text": {"tag": "plain_text", "content": f"📖 打开旗舰网页版{meta['name']}（含走势图与筛选）"},
                     "type": "primary",
-                    "url": site_url,
+                    "url": target_url,
                 }
             ],
         })
 
+    # 注脚同时保留“早报/晚报”，确保飞书机器人已配置的“早报”安全关键词始终命中
     elements.append({
         "tag": "note",
         "elements": [
             {
                 "tag": "plain_text",
-                "content": f"信源：Bloomberg / FT / Reuters / WSJ / CNBC / 财联社 / BBC | {now.strftime('%H:%M')}",
+                "content": f"早报/晚报双推终端 · 信源：Bloomberg / FT / Reuters / WSJ / CNBC / 财联社 / BBC | {now.strftime('%H:%M')}",
             }
         ],
     })
@@ -1722,34 +1541,40 @@ def build_feishu_summary_card(now, us_idx, tech_stocks, a_idx, macro_assets, llm
             "config": {"wide_screen_mode": True},
             "header": {
                 "template": header_color,
-                "title": {"tag": "plain_text", "content": f"☕ 全球财经与热点早报 | {today_str} {weekday}"},
+                "title": {"tag": "plain_text", "content": f"{meta['icon']} {meta['full_name']} | {today_str} {weekday}"},
             },
             "elements": elements,
         },
     }
 
 
-def run_generate():
+def run_generate(edition_arg="auto"):
     now = datetime.datetime.now(BJ_TZ)
+    edition = resolve_edition(edition_arg, now)
+    meta = get_edition_meta(edition)
+    print(f"=== 开始生成【{meta['full_name']}】({edition}) ===")
+
     print("1/3 正在抓取跨市场精准行情与 7 日走势...")
     us_idx = fetch_yf_group({"纳斯达克": "^IXIC", "标普500": "^GSPC", "道琼斯": "^DJI", "费城半导体": "^SOX"})
     tech_stocks = fetch_yf_group({"英伟达": "NVDA", "苹果": "AAPL", "微软": "MSFT", "特斯拉": "TSLA"})
     macro_assets = fetch_yf_group({"黄金": "GC=F", "WTI原油": "CL=F", "BTC": "BTC-USD", "离岸RMB": "CNH=X"})
     a_idx = get_a_market()
 
-    print("2/3 正在抓取过去 24 小时机构级信源...")
-    global_fin_raw = fetch_rss_within_24h(GLOBAL_FINANCE_RSS, max_per_feed=7)
-    general_raw = fetch_rss_within_24h(GENERAL_NEWS_RSS, max_per_feed=5)
+    print(f"2/3 正在抓取过去 {meta['rss_hours']} 小时机构级信源...")
+    global_fin_raw = fetch_rss_within_hours(GLOBAL_FINANCE_RSS, hours=meta["rss_hours"], max_per_feed=7)
+    general_raw = fetch_rss_within_hours(GENERAL_NEWS_RSS, hours=meta["rss_hours"], max_per_feed=5)
     cn_fin_raw = fetch_cls_telegraph(limit=55)
 
-    print("3/3 正在调用大模型评级排序并渲染旗舰网页...")
-    llm_data = analyze_with_llm(global_fin_raw, cn_fin_raw, general_raw)
-    save_web_pages(now, us_idx, tech_stocks, a_idx, macro_assets, llm_data)
+    print("3/3 正在调用大模型评级排序并渲染网页...")
+    llm_data = analyze_with_llm(global_fin_raw, cn_fin_raw, general_raw, edition)
+    edition_id = save_web_pages(now, edition, us_idx, tech_stocks, a_idx, macro_assets, llm_data)
 
     site_url = get_site_url()
-    card_payload = build_feishu_summary_card(now, us_idx, tech_stocks, a_idx, macro_assets, llm_data, site_url)
+    card_payload = build_feishu_summary_card(
+        now, edition, edition_id, us_idx, tech_stocks, a_idx, macro_assets, llm_data, site_url
+    )
     CARD_CACHE_FILE.write_text(json.dumps(card_payload, ensure_ascii=False), encoding="utf-8")
-    print(f"网页地址已绑定为: {site_url or '未检测到仓库名'}")
+    print(f"网页永久链接已绑定为: {site_url}archive/{edition_id}.html")
 
 
 def run_notify():
@@ -1766,11 +1591,16 @@ def run_notify():
 
 
 if __name__ == "__main__":
-    mode = sys.argv[1] if len(sys.argv) > 1 else "--all"
-    if mode == "--generate":
-        run_generate()
-    elif mode == "--notify":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--generate", action="store_true")
+    parser.add_argument("--notify", action="store_true")
+    parser.add_argument("--edition", choices=["auto", "am", "pm"], default="auto")
+    args = parser.parse_args()
+
+    if args.generate:
+        run_generate(args.edition)
+    elif args.notify:
         run_notify()
     else:
-        run_generate()
+        run_generate(args.edition)
         run_notify()
