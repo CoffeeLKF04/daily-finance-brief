@@ -1,0 +1,12 @@
+# 运行期产物：飞书卡片缓存在仓库根目录生成，不应进版本库
+latest_feishu_card.json
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# 编辑器 / 系统
+.DS_Store
+*.swp
