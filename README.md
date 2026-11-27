@@ -95,7 +95,7 @@ GitHub Actions: .github/workflows/brief.yml
 
 | 函数 | 作用 |
 |---|---|
-| `fetch_rss_within_hours(dict, hours, max_per_feed)` | 8 线程并发拉 RSS，按发布时间过滤窗口；**命中少于 8 条时自动放宽到 24h**；无时间戳的条目用窗口中点兜底 |
+| `fetch_rss_within_hours(dict, hours, max_per_feed)` | 8 线程并发拉 RSS，按发布时间过滤窗口；**命中少于 8 条时自动放宽到 24h**；无时间戳的条目标为「近期」并排在有时间条目之后 |
 | `_call_cls_api()` | 财联社接口，兼容 `stock_news_global_cls` 与 `stock_info_global_cls` 两个名字 |
 | `fetch_cls_telegraph` / `fetch_sina_7x24` / `fetch_em_flash` / `fetch_ths_flash` | 四个国内快讯源，各自返回 `[{source, ts, text, link}]` |
 | `_dedup_key(text)` | 去标点空格后取前 34 字做指纹，吃掉同事件转载 |
@@ -109,7 +109,7 @@ GitHub Actions: .github/workflows/brief.yml
 | `_extract_json(text)` | 宽容解析：容忍 ` ``` ` 围栏、前后寒暄、尾部杂质 |
 | `_call_llm_json(client, prompt, attempts=3)` | 失败重试 3 次，递增退避 |
 | `_fallback_llm_data(edition)` | 全失败时的降级数据：行情与页面结构照常，新闻区标注不可用 |
-| `normalize_and_sort_llm_data(data)` | 代码层强制清洗 score 并降序，不信任模型给的顺序 |
+| `normalize_and_sort_llm_data(data, edition)` | 代码层清洗 score/sentiment/link、按分数降序，并按 am/close/pm 配额截断，最终不信任模型顺序 |
 
 **LLM 输出契约**（`us_global_news` / `cn_a_news` / `general_news` 三个列表）：
 
@@ -131,10 +131,10 @@ link        原文链接，没有则空
 |---|---|
 | `HTML_TEMPLATE` | 单文件模板，内联 CSS + 约 30 行 JS，深色默认、浅色可切、`localStorage` 记忆 |
 | `render_sparkline_svg` | 手写 SVG 走势线（68×22），无图表库依赖 |
-| `render_market_group_html` | 行情组卡：整组 `<details>` 折叠 + 组内「展开其余 N 项」 |
-| `render_must_read_html` | 首屏「必读」横向 chip，锚点跳到对应新闻并自动切 Tab |
-| `render_news_cards_html` | 每条新闻一个 `<details>`，只有首条 5 分默认展开 |
-| `render_news_sections_html` | 三个板块做成 Tab；**close 版顺序调整为 A股优先** |
+| `render_market_group_html` | 行情组卡：整组 `<details>` 折叠 + 组内「展开其余 N 项」，每条带独立 SVG 走势线 |
+| `render_must_read_html` | 首屏「必读」横向 chip，带右侧滚动提示，锚点跳到对应新闻并自动切 Tab |
+| `render_news_cards_html` | 每条新闻一个 `<details>`，只有首条 5 分默认展开，标签按栏目高亮 |
+| `render_news_sections_html` | 三个板块做成 Tab；**close 版顺序调整为 A股优先**；每个 Tab 可一键展开/收起全部新闻 |
 | `render_page_html` | 占位符替换，组装整页 |
 | `save_web_pages` | 写 `index.html`、独立归档页、`manifest.json`，并清理超期孤儿页 |
 
@@ -159,7 +159,7 @@ link        原文链接，没有则空
 | RSS 窗口 `rss_hours` | 16h | 10h | 10h |
 | 官方源窗口 | max(48, rss_hours) | 同左 | 同左 |
 | 定位 | 隔夜美股 + 盘前催化 | A股全天复盘 + 日间催化 | 欧盘 + 美股盘前 |
-| 新闻配额 | 美6 / 国5 / 国际4 | 国6 / 美4 / 国际4 | 美6 / 国4 / 国际4 |
+| 新闻配额 | 美6 / 国5 / 国际4 | 美4 / 国6 / 国际4 | 美6 / 国4 / 国际4 |
 | 行情卡顺序 | 美股·科技·A股·大宗 | **A股**·大宗·美股·科技 | 美股·科技·大宗·A股 |
 | Tab 顺序 | 美股·A股·国际 | **A股**·美股·国际 | 美股·A股·国际 |
 | 主题色 | 天蓝 `#38bdf8` | 琥珀 `#f59e0b` | 靛蓝 `#818cf8` |
@@ -194,7 +194,8 @@ link        原文链接，没有则空
 | 改推送时间 | **服务器** `crontab -u admin -e`；或给 workflow 加 `schedule`（UTC） |
 | 改网页样式 | `HTML_TEMPLATE` 里的 CSS |
 | 改归档保留期 | `save_web_pages` 里的 `[:180]` |
-| 改行情脏数据阈值 | `_pct_limit` |
+| 改行情脏数据阈值 | `_pct_limit`（A股普通指数 12%，创业板/科创50 22%，北证50 32%） |
+| 改页面交互 | `HTML_TEMPLATE` 里的 JS：主题持久化、Tab、全部展开/收起、回顶按钮、锚点高亮 |
 
 ---
 
@@ -214,9 +215,9 @@ link        原文链接，没有则空
 | 坑 | 说明 |
 |---|---|
 | **akshare 会双向改名** | 1.20.41 有 `stock_zh_index_daily_em`、1.20.70 换成 `index_zh_daily_sina`；`index_zh_spot_em` 与 `stock_zh_index_spot_em` 也是互相替代。代码用候选链覆盖了两头，**别再写死单个函数名**，并保持 `requirements.txt` 锁版本 |
-| `cls_limit` 是死配置 | `get_edition_meta` 里定义了 55/65/50，但 `run_generate` 实际调用 `fetch_cn_flash(limit=90)`，这个字段没人读 |
 | 北证50 无兜底 | `A_INDEX_TARGETS` 里它的 Yahoo 代码是空串，快照源没给就只能缺，日志会明说 |
-| 没有时间戳的 RSS | 用「窗口中点」当时间兜底，可能把旧闻排到中间 |
+| 没有时间戳的 RSS | 现在标为「近期」并排到有时间戳条目之后，不再伪装成窗口中点 |
+| A股指数阈值不同 | 创业板/科创50可到 ±20%，北证50可到 ±30%；`_pct_limit` 已按指数类型放宽，普通指数仍拦在 ±12% |
 | 推送 token 权限 | 服务器上的 fine-grained PAT 只有 `Actions: write`，**能派发、不能 push 代码**。要改代码得用别的凭据（如 `gh` OAuth 会话） |
 | Node 20 弃用 | actions 已升 `checkout@v5` / `setup-python@v6`（node24），不要再退回 v4/v5 |
 | Pages 有延迟 | 提交后固定 `sleep 30` 再发卡片，偶尔仍可能点开是旧页面 |

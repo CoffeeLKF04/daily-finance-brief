@@ -133,9 +133,6 @@ def get_edition_meta(edition):
             "icon": "🌇",
             "badge_text": "🌇 收盘版 · A股全天复盘与日间催化",
             "rss_hours": 10,
-            "cls_limit": 65,
-            "us_card_title": "🇺🇸 美股上日收盘",
-            "a_card_title": "🇨🇳 A 股今日收盘",
             "feishu_neutral_color": "orange",
         }
     if edition == "pm":
@@ -146,9 +143,6 @@ def get_edition_meta(edition):
             "icon": "🌙",
             "badge_text": "🌙 晚报版 · 欧盘动向与美股前瞻",
             "rss_hours": 10,
-            "cls_limit": 50,
-            "us_card_title": "🇺🇸 美股最新 / 盘面",
-            "a_card_title": "🇨🇳 A 股今日收盘",
             "feishu_neutral_color": "indigo",
         }
     return {
@@ -158,9 +152,6 @@ def get_edition_meta(edition):
         "icon": "☕",
         "badge_text": "☀️ 早报版 · 隔夜美股与盘前催化",
         "rss_hours": 16,
-        "cls_limit": 55,
-        "us_card_title": "🇺🇸 隔夜美股指数",
-        "a_card_title": "🇨🇳 A 股上日收盘",
         "feishu_neutral_color": "blue",
     }
 
@@ -236,6 +227,14 @@ def _pct_limit(symbol):
         return 40.0
     if symbol.endswith("=F") or symbol.endswith("=X"):
         return 15.0
+    # 北证50 单日涨跌幅上限 ±30%
+    if symbol == "bj899050":
+        return 32.0
+    # 科创/创业板成分指数单日理论上可达 ±20%
+    if symbol in ("399006.SZ", "000688.SS"):
+        return 22.0
+    if symbol.endswith((".SS", ".SZ")):
+        return 12.0
     return 25.0
 
 
@@ -534,7 +533,7 @@ def _quote_from_index_row(name, yf_symbol, row, em_symbol, want_history=True):
         hist, last_day = _index_history(em_symbol)
         if hist and price:
             hist = hist[:-1] + [price]
-    return _build_quote(name, yf_symbol, price, prev, hist, _a_as_of(last_day), "东财·新浪")
+    return _build_quote(name, yf_symbol or em_symbol, price, prev, hist, _a_as_of(last_day), "东财·新浪")
 
 
 def get_a_market():
@@ -657,15 +656,19 @@ def fetch_rss_within_hours(rss_dict, hours=12, max_per_feed=7):
             for ts, title, summary, link in parsed:
                 if not title:
                     continue
-                # 没有发布时间戳的源（如某些付费墙 RSS）按窗口内处理，避免被整体丢掉
+                # 没有发布时间戳的源（如某些付费墙 RSS）按窗口内处理，避免被整体丢掉；
+                # 排序时放到有时间戳的条目后面（ts=0），避免旧闻冒充最新插队到前面。
                 if ts is not None and ts < cutoff_ts:
                     continue
-                kept.append((ts or (now_utc - datetime.timedelta(hours=window_hours / 2)).timestamp(),
-                             title, summary, link))
+                kept.append((ts or 0, title, summary, link))
             kept.sort(key=lambda x: x[0], reverse=True)
             print(f"[RSS] {source_name} 命中 {len(kept)} 条")
             for ts, title, summary, link in kept[:max_per_feed]:
-                pub_str = datetime.datetime.fromtimestamp(ts, tz=BJ_TZ).strftime("%m-%d %H:%M")
+                pub_str = (
+                    datetime.datetime.fromtimestamp(ts, tz=BJ_TZ).strftime("%m-%d %H:%M")
+                    if ts > 0
+                    else "近期"
+                )
                 lines.append(f"[{source_name} | {pub_str}] 标题:{title} | 摘要:{summary} | 链接:{link}")
         return lines
 
@@ -856,6 +859,7 @@ def fetch_cn_flash(limit=90):
     """国内快讯多源聚合：财联社 / 新浪 / 东财 / 同花顺，去重后按时间混排。
 
     单一信源一旦接口变动或限流就会整段空白，多源交叉后既补足覆盖面，也能相互印证。
+    四家全部并发抓取，避免串行等待拖慢任务。
     """
     collectors = (
         ("财联社", lambda: fetch_cls_telegraph(limit=60)),
@@ -863,13 +867,20 @@ def fetch_cn_flash(limit=90):
         ("东财", lambda: fetch_em_flash(limit=30)),
         ("同花顺", lambda: fetch_ths_flash(limit=30)),
     )
-    merged, seen, stat = [], set(), {}
-    for label, fn in collectors:
+
+    def _run(pair):
+        label, fn = pair
         try:
-            batch = fn() or []
+            return label, (fn() or [])
         except Exception as e:
             print(f"[国内快讯] {label} 异常: {type(e).__name__}: {str(e)[:60]}")
-            batch = []
+            return label, []
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        batches = list(pool.map(_run, collectors))
+
+    merged, seen, stat = [], set(), {}
+    for label, batch in batches:
         stat[label] = len(batch)
         for item in batch:
             key = _dedup_key(item["text"])
@@ -1067,20 +1078,30 @@ def analyze_with_llm(global_fin_raw, cn_fin_raw, general_raw, edition, official_
     if not data:
         print("[LLM] 多次重试仍失败，降级为「仅行情」模式继续发布")
         return _fallback_llm_data(edition)
-    return normalize_and_sort_llm_data(data)
+    return normalize_and_sort_llm_data(data, edition=edition)
 
 
-def normalize_and_sort_llm_data(data):
-    """代码层强制清洗 score 并按重磅程度降序排列"""
+def normalize_and_sort_llm_data(data, edition="am"):
+    """代码层强制清洗字段（score/sentiment/link）、按重磅程度降序并执行各板块配额上限"""
+    quotas = {
+        "close": {"us_global_news": 4, "cn_a_news": 6, "general_news": 4},
+        "pm": {"us_global_news": 6, "cn_a_news": 4, "general_news": 4},
+        "am": {"us_global_news": 6, "cn_a_news": 5, "general_news": 4},
+    }.get(edition, {"us_global_news": 6, "cn_a_news": 5, "general_news": 4})
+
     for key in ("us_global_news", "cn_a_news", "general_news"):
-        items = data.get(key) or []
+        items = [x for x in (data.get(key) or []) if isinstance(x, dict) and str(x.get("title") or "").strip()]
         for idx, item in enumerate(items):
             item["score"] = safe_score(item.get("score", 3))
+            if item.get("sentiment") not in ("利好", "利空", "中性"):
+                item["sentiment"] = "中性"
+            link = str(item.get("link") or "").strip()
+            item["link"] = link if link.startswith(("http://", "https://")) else ""
             item["_orig_idx"] = idx
         items.sort(key=lambda x: (-x["score"], x["_orig_idx"]))
         for item in items:
             item.pop("_orig_idx", None)
-        data[key] = items
+        data[key] = items[: quotas.get(key, 6)]
     return data
 
 
@@ -1108,7 +1129,7 @@ def render_sparkline_svg(values, stroke_color, grad_id):
         f'<svg class="sparkline" width="{w}" height="{h}" viewBox="0 0 {w} {h}" fill="none" aria-hidden="true">'
         f'  <defs>'
         f'    <linearGradient id="{grad_id}" x1="0" y1="0" x2="0" y2="1">'
-        f'      <stop offset="0%" stop-color="{stroke_color}" stop-opacity="0.32"/>'
+        f'      <stop offset="0%" stop-color="{stroke_color}" stop-opacity="0.34"/>'
         f'      <stop offset="100%" stop-color="{stroke_color}" stop-opacity="0"/>'
         f'    </linearGradient>'
         f'  </defs>'
@@ -1136,7 +1157,7 @@ def _as_of_label(items):
     return raw[:6]
 
 
-def render_market_group_html(title, data, is_us=True, preview=4):
+def render_market_group_html(title, data, is_us=True, preview=4, card_idx=0):
     """行情组卡：可整组折叠；默认只露前 preview 行，其余收进「展开其余 N 项」。
 
     标的变多后（A股/港股 11、美股指数 7、重点个股 12、大宗 10）如果一次性铺开，
@@ -1151,16 +1172,17 @@ def render_market_group_html(title, data, is_us=True, preview=4):
         "flat": "#94a3b8",
     }
     rows = []
-    for item in data:
+    for r_idx, item in enumerate(data):
         pct = item["pct"]
         cls = "flat" if abs(pct) < 0.005 else (pos_cls if pct > 0 else neg_cls)
-        grad_id = "sp-" + re.sub(r"[^A-Za-z0-9]", "", item.get("symbol", "x"))
+        # grad_id 加上卡片和行序号，彻底避免不同页面或符号清洗后 gradient id 冲突
+        safe_sym = re.sub(r"[^A-Za-z0-9]", "", item.get("symbol", "x")) or "x"
+        grad_id = f"sp-{card_idx}-{r_idx}-{safe_sym}"
         spark = render_sparkline_svg(item.get("history", []), stroke_map[cls], grad_id)
         rows.append(
             f'<div class="mrow">'
-            f'{spark}'
             f'<span class="mname">{esc(item["name"])}<em>{esc(item["price"])}</em></span>'
-            f'<span class="mpct {cls}">{pct:+.2f}%</span>'
+            f'<span class="mright">{spark}<span class="mpct {cls}">{pct:+.2f}%</span></span>'
             f'</div>'
         )
     if not rows:
@@ -1213,7 +1235,7 @@ def render_must_read_html(llm_data, edition):
         chips.append(
             f'<a class="chip" href="#{anchor}"><b>{badge}</b><span>{esc(title)}</span><i>›</i></a>'
         )
-    return f'<div class="chips">{"".join(chips)}</div>'
+    return f'<div class="chips-wrap"><div class="chips">{"".join(chips)}</div></div>'
 
 
 def render_news_cards_html(items, section_prefix, with_impact=True):
@@ -1257,7 +1279,7 @@ def render_news_cards_html(items, section_prefix, with_impact=True):
             f'<span class="nsent {sent_cls}">{sent_mark}</span></span>'
             f'</summary>'
             f'<div class="nbody">'
-            f'<div class="ntag"><span>{esc(item.get("tag", "要闻"))}</span><span>{esc(item.get("source", ""))}</span></div>'
+            f'<div class="ntag"><span class="ntag-cat">{esc(item.get("tag", "要闻"))}</span><span class="ntag-src">{esc(item.get("source", ""))}</span></div>'
             f'<p class="nfact">{body}</p>'
             f'{impact_html}'
             f'<div class="nfoot">{link_html}</div>'
@@ -1310,13 +1332,16 @@ def render_news_sections_html(us_news, cn_news, gen_news, edition):
     tabs, panels = [], []
     for idx, (key, short, title, items, with_impact) in enumerate(blocks):
         on = " on" if idx == 0 else ""
+        sel = "true" if idx == 0 else "false"
         tabs.append(
-            f'<button class="tab{on}" type="button" data-tab="{key}" role="tab">'
+            f'<button class="tab{on}" type="button" data-tab="{key}" role="tab" aria-selected="{sel}">'
             f'{short}<em>{len(items)}</em></button>'
         )
+        # 首条重磅默认已展开，其余可通过面板右上角「全部展开/收起」一键切换
+        toggle_btn = '<button class="ptoggle" type="button" data-expanded="0">展开全部</button>' if items else ""
         panels.append(
-            f'<section class="panel{on}" data-panel="{key}">'
-            f'<div class="phead">{esc(title)}</div>'
+            f'<section class="panel{on}" data-panel="{key}" role="tabpanel">'
+            f'<div class="phead"><span>{esc(title)}</span>{toggle_btn}</div>'
             f'{render_news_cards_html(items, key, with_impact=with_impact)}'
             f'</section>'
         )
@@ -1329,8 +1354,18 @@ HTML_TEMPLATE = """
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-<meta name="theme-color" content="#070b14" />
+<meta name="theme-color" content="#080b13" />
 <title>__FULL_NAME__ · __DATE_STR__</title>
+<script>
+  (function () {
+    try {
+      var t = localStorage.getItem("brief-theme");
+      if (t === "light" || t === "dark") {
+        document.documentElement.setAttribute("data-theme", t);
+      }
+    } catch (e) {}
+  })();
+</script>
 <style>
   :root {
     --bg: #080b13;
@@ -1395,7 +1430,7 @@ HTML_TEMPLATE = """
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  html { -webkit-text-size-adjust: 100%; }
+  html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
   body {
     font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB",
       "Noto Sans CJK SC", "Microsoft YaHei", sans-serif;
@@ -1404,7 +1439,8 @@ HTML_TEMPLATE = """
     font-size: 14px;
     line-height: 1.62;
     -webkit-font-smoothing: antialiased;
-    padding-bottom: 10px;
+    -webkit-tap-highlight-color: transparent;
+    padding-bottom: max(18px, env(safe-area-inset-bottom));
   }
   .wrap { max-width: 720px; margin: 0 auto; padding: 0 14px; }
   .pg {
@@ -1422,7 +1458,7 @@ HTML_TEMPLATE = """
     -webkit-backdrop-filter: blur(16px) saturate(1.4);
     border-bottom: 1px solid var(--border);
   }
-  .hdrin { height: 46px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .hdrin { height: 48px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
   .hl { display: flex; align-items: center; gap: 7px; min-width: 0; }
   .dot {
     width: 5px; height: 5px; border-radius: 50%;
@@ -1437,18 +1473,21 @@ HTML_TEMPLATE = """
   }
   .hr { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
   select.arch {
-    max-width: 104px; height: 27px;
+    max-width: 112px; height: 30px;
     background: var(--bg-card); color: var(--text2);
     border: 1px solid var(--border); border-radius: 8px;
-    font-size: 11px; padding: 0 2px; font-family: inherit;
+    font-size: 11px; padding: 0 4px; font-family: inherit;
+    cursor: pointer;
   }
   button.icon {
-    width: 27px; height: 27px; border-radius: 8px; cursor: pointer;
+    width: 30px; height: 30px; border-radius: 8px; cursor: pointer;
     background: var(--bg-card); color: var(--text2);
-    border: 1px solid var(--border); font-size: 12px; line-height: 1;
-    transition: border-color 0.15s ease;
+    border: 1px solid var(--border); font-size: 13px; line-height: 1;
+    display: inline-flex; align-items: center; justify-content: center;
+    transition: border-color 0.15s ease, transform 0.12s ease;
   }
-  button.icon:active { border-color: var(--accent); }
+  button.icon:hover { border-color: var(--border-strong); }
+  button.icon:active { border-color: var(--accent); transform: scale(0.95); }
 
   /* ---------- 头版 ---------- */
   .hero { padding: 16px 0 12px; }
@@ -1523,17 +1562,20 @@ HTML_TEMPLATE = """
 
   .mrow {
     position: relative;
-    display: flex; align-items: center; justify-content: space-between; gap: 4px;
-    padding: 4px 0; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between; gap: 6px;
+    padding: 4.5px 0; border-bottom: 1px solid var(--border);
   }
   .mrow:last-child { border-bottom: none; padding-bottom: 1px; }
+  .mright {
+    display: flex; align-items: center; gap: 5px; flex: 0 0 auto;
+  }
   .mrow .sparkline {
-    position: absolute; right: -1px; bottom: 2px;
-    width: 42px; height: 14px; opacity: 0.28; pointer-events: none;
+    width: 34px; height: 13px; opacity: 0.72; pointer-events: none; flex: 0 0 auto;
   }
   .mname {
-    display: flex; flex-direction: column; min-width: 0;
-    font-size: 11.5px; font-weight: 600; line-height: 1.22; letter-spacing: -0.01em;
+    display: flex; flex-direction: column; min-width: 0; flex: 1;
+    font-size: 11.5px; font-weight: 600; line-height: 1.24; letter-spacing: -0.01em;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
   .mname em {
     font-style: normal; font-family: var(--mono); font-size: 10px;
@@ -1541,9 +1583,10 @@ HTML_TEMPLATE = """
   }
   .mpct {
     position: relative; z-index: 1; flex: 0 0 auto;
+    min-width: 52px; text-align: right;
     font-family: var(--mono); font-size: 10.5px; font-weight: 800;
     font-variant-numeric: tabular-nums; letter-spacing: -0.02em;
-    padding: 1px 4.5px; border-radius: 5px;
+    padding: 1.5px 5px; border-radius: 5px;
     background: var(--bg-subtle);
   }
   .pos-green, .neg-green { color: var(--up-green); }
@@ -1569,21 +1612,29 @@ HTML_TEMPLATE = """
   .gend .gtime { font-size: 8.5px; letter-spacing: 0.02em; }
 
   /* ---------- 必读 chips ---------- */
+  .chips-wrap { position: relative; margin-bottom: 12px; }
+  .chips-wrap::after {
+    content: ""; position: absolute; top: 0; right: 0; bottom: 0; width: 22px;
+    pointer-events: none;
+    background: linear-gradient(90deg, transparent, var(--bg));
+  }
   .chips {
     display: flex; gap: 6px; overflow-x: auto;
-    padding: 1px 0 12px; scrollbar-width: none;
+    padding: 1px 22px 1px 2px; scrollbar-width: none;
     scroll-snap-type: x proximity;
   }
   .chips::-webkit-scrollbar { display: none; }
   .chip {
-    flex: 0 0 auto; max-width: 80vw; scroll-snap-align: start;
+    flex: 0 0 auto; max-width: 76vw; scroll-snap-align: start;
     display: flex; align-items: center; gap: 6px;
     padding: 7px 10px; border-radius: 10px;
     background: linear-gradient(135deg, var(--accent-soft), transparent 70%), var(--bg-card);
     border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--border));
     color: var(--text); text-decoration: none; font-size: 12px; line-height: 1.4;
+    transition: border-color 0.15s ease, transform 0.12s ease;
   }
-  .chip:active { border-color: var(--accent); }
+  .chip:hover { border-color: var(--accent); }
+  .chip:active { border-color: var(--accent); transform: scale(0.985); }
   .chip b {
     flex: 0 0 auto; font-family: var(--mono); font-size: 9.5px; font-weight: 800;
     color: var(--amber); letter-spacing: -0.02em;
@@ -1619,7 +1670,7 @@ HTML_TEMPLATE = """
 
   /* ---------- Tab ---------- */
   .tabs {
-    position: sticky; top: 46px; z-index: 50;
+    position: sticky; top: 48px; z-index: 50;
     display: flex; gap: 2px; padding: 5px 0 0;
     background: color-mix(in srgb, var(--bg) 92%, transparent);
     backdrop-filter: blur(14px);
@@ -1635,6 +1686,7 @@ HTML_TEMPLATE = """
     font-family: inherit; letter-spacing: 0.01em;
     transition: color 0.18s ease;
   }
+  .tab:hover { color: var(--text2); }
   .tab em {
     font-style: normal; font-family: var(--mono); font-size: 9.5px;
     opacity: 0.8; font-weight: 600;
@@ -1656,13 +1708,22 @@ HTML_TEMPLATE = """
     to { opacity: 1; transform: none; }
   }
   .phead {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
     font-size: 10.5px; font-weight: 700; color: var(--text3);
     padding: 11px 2px 5px; letter-spacing: 0.02em;
   }
-  .nitem { border-bottom: 1px solid var(--border); }
+  .ptoggle {
+    background: transparent; border: 1px solid var(--border); color: var(--text3);
+    font-family: inherit; font-size: 10px; font-weight: 600;
+    padding: 2px 8px; border-radius: 999px; cursor: pointer;
+    transition: border-color 0.15s ease, color 0.15s ease;
+  }
+  .ptoggle:hover, .ptoggle:active { border-color: var(--accent); color: var(--accent); }
+  .nitem { border-bottom: 1px solid var(--border); transition: background-color 0.25s ease; }
+  .nitem.flash { background: var(--accent-soft); border-radius: 8px; }
   .nitem > summary {
-    display: grid; grid-template-columns: 22px 1fr auto; gap: 7px; align-items: start;
-    padding: 11px 2px; cursor: pointer; list-style: none;
+    display: grid; grid-template-columns: 22px 1fr auto; gap: 8px; align-items: start;
+    padding: 12px 2px; cursor: pointer; list-style: none;
     transition: opacity 0.15s ease;
   }
   .nitem > summary::-webkit-details-marker { display: none; }
@@ -1685,12 +1746,13 @@ HTML_TEMPLATE = """
   .bull { color: var(--up-red); }
   .bear { color: var(--up-green); }
   .neu { color: var(--text3); }
-  .nbody { padding: 0 2px 13px 29px; animation: fadeUp 0.24s ease both; }
-  .ntag { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 7px; }
+  .nbody { padding: 0 2px 13px 30px; animation: fadeUp 0.24s ease both; }
+  .ntag { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-bottom: 7px; }
   .ntag span {
     font-size: 9.5px; font-weight: 600; padding: 1.5px 7px; border-radius: 5px;
     background: var(--bg-subtle); color: var(--text2); letter-spacing: 0.01em;
   }
+  .ntag .ntag-cat { background: var(--accent-soft); color: var(--accent); }
   .nfact { font-size: 12.5px; line-height: 1.76; color: var(--text2); margin-bottom: 8px; }
   .nimpact {
     font-size: 12px; line-height: 1.68; color: var(--text);
@@ -1703,8 +1765,23 @@ HTML_TEMPLATE = """
   }
   .nfoot { display: flex; justify-content: flex-end; font-size: 11px; }
   .nfoot a { color: var(--accent); font-weight: 700; text-decoration: none; }
+  .nfoot a:hover { text-decoration: underline; }
   .nfoot .nolink { color: var(--text3); }
   .empty { padding: 24px 8px; text-align: center; font-size: 12px; color: var(--text3); }
+
+  .btt {
+    position: fixed; right: 16px; bottom: max(18px, env(safe-area-inset-bottom));
+    z-index: 55; width: 34px; height: 34px; border-radius: 50%;
+    background: color-mix(in srgb, var(--bg-card) 90%, transparent);
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    color: var(--text2); border: 1px solid var(--border-strong);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+    font-size: 13px; font-weight: 700; cursor: pointer;
+    opacity: 0; pointer-events: none; transform: translateY(8px);
+    transition: opacity 0.2s ease, transform 0.2s ease, border-color 0.15s ease;
+  }
+  .btt.show { opacity: 1; pointer-events: auto; transform: none; }
+  .btt:hover, .btt:active { border-color: var(--accent); color: var(--accent); }
 
   footer {
     margin-top: 20px; padding: 14px 0 8px;
@@ -1717,12 +1794,14 @@ HTML_TEMPLATE = """
     .hero h1 { font-size: 25px; }
     .mkt { gap: 10px; }
     .mrow { padding: 5px 0; }
+    .mrow .sparkline { width: 46px; height: 15px; }
     .mname { font-size: 12.5px; }
     .mpct { font-size: 11.5px; }
     .ntitle { font-size: 14.5px; }
     .nfact { font-size: 13px; }
   }
   @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
     * { animation: none !important; transition: none !important; }
   }
 </style>
@@ -1773,39 +1852,69 @@ HTML_TEMPLATE = """
   </footer>
 </main>
 
+<button class="btt" id="btt" type="button" aria-label="回到顶部">↑</button>
+
 <script>
   (function () {
     var root = document.documentElement;
     var tg = document.getElementById("tg");
+    var metaTheme = document.querySelector('meta[name="theme-color"]');
     function apply(t) {
       root.setAttribute("data-theme", t);
       tg.textContent = t === "dark" ? "☀️" : "🌙";
+      if (metaTheme) metaTheme.setAttribute("content", t === "dark" ? "#080b13" : "#f4f6fa");
     }
-    apply(localStorage.getItem("brief-theme") || "dark");
+    apply(root.getAttribute("data-theme") || "dark");
     tg.addEventListener("click", function () {
       var next = root.getAttribute("data-theme") === "dark" ? "light" : "dark";
-      localStorage.setItem("brief-theme", next);
+      try { localStorage.setItem("brief-theme", next); } catch (e) {}
       apply(next);
     });
 
     var pg = document.getElementById("pg");
+    var btt = document.getElementById("btt");
     window.addEventListener("scroll", function () {
       var top = window.scrollY || document.documentElement.scrollTop;
       var h = document.documentElement.scrollHeight - window.innerHeight;
       pg.style.width = (h > 0 ? Math.min(100, (top / h) * 100) : 0) + "%";
+      if (btt) btt.classList.toggle("show", top > 360);
     }, { passive: true });
+    if (btt) {
+      btt.addEventListener("click", function () {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      });
+    }
 
     var tabs = [].slice.call(document.querySelectorAll(".tab"));
     var panels = [].slice.call(document.querySelectorAll(".panel"));
     function pick(key) {
-      tabs.forEach(function (t) { t.classList.toggle("on", t.dataset.tab === key); });
+      tabs.forEach(function (t) {
+        var on = t.dataset.tab === key;
+        t.classList.toggle("on", on);
+        t.setAttribute("aria-selected", on ? "true" : "false");
+      });
       panels.forEach(function (p) { p.classList.toggle("on", p.dataset.panel === key); });
     }
     tabs.forEach(function (t) {
       t.addEventListener("click", function () { pick(t.dataset.tab); });
     });
 
-    // 必读 chip / 外部锚点：自动切到对应 Tab 并展开该条
+    // 面板右上角「展开全部 / 收起全部」
+    document.querySelectorAll(".ptoggle").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var panel = btn.closest(".panel");
+        if (!panel) return;
+        var expand = btn.getAttribute("data-expanded") !== "1";
+        panel.querySelectorAll(".nitem").forEach(function (d) {
+          if (expand) d.setAttribute("open", "");
+          else d.removeAttribute("open");
+        });
+        btn.setAttribute("data-expanded", expand ? "1" : "0");
+        btn.textContent = expand ? "收起全部" : "展开全部";
+      });
+    });
+
+    // 必读 chip / 外部锚点：自动切到对应 Tab、展开该条并高亮一下
     function jumpToHash() {
       var hash = window.location.hash;
       if (!hash || hash.length < 2) return;
@@ -1816,6 +1925,10 @@ HTML_TEMPLATE = """
       if (panel) pick(panel.dataset.panel);
       if (el.tagName === "DETAILS") el.setAttribute("open", "");
       el.scrollIntoView({ block: "center" });
+      el.classList.remove("flash");
+      void el.offsetWidth;
+      el.classList.add("flash");
+      setTimeout(function () { el.classList.remove("flash"); }, 1400);
     }
     window.addEventListener("hashchange", jumpToHash);
     jumpToHash();
@@ -1874,8 +1987,8 @@ def render_page_html(now, edition, us_idx, tech_stocks, a_idx, macro_assets, llm
         kicker = "MORNING BRIEF · 早报总览"
 
     market_tiles = "".join(
-        render_market_group_html(title, data, is_us=is_us, preview=preview)
-        for title, data, is_us, preview in groups
+        render_market_group_html(title, data, is_us=is_us, preview=preview, card_idx=i)
+        for i, (title, data, is_us, preview) in enumerate(groups)
     )
     tabs_html, panels_html = render_news_sections_html(us_news, cn_news, gen_news, edition)
 
