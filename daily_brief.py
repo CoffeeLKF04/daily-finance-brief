@@ -224,9 +224,9 @@ def _yf_quote(name, symbol):
 
     旧实现直接拿 closes[-1]/closes[-2] 相除，一是无法发现「数据停在几天前」的陈旧行情，
     二是 fast_info 兜底时 lastPrice 与 previousClose 可能来自不同交易日，导致涨跌幅算错。
-    这里改成：日线与实时价各算一次涨跌幅，两者一致才用实时价，否则回退日线并打日志。
+    这里改成：先判断日线最后一根是不是「今天」，再决定昨收取哪一根，保证口径统一为「当前价 / 上一交易日收盘」。
     """
-    closes, last_date = [], None
+    closes, last_date, last_tz = [], None, None
     live, live_prev = None, None
     try:
         ticker = yf.Ticker(symbol)
@@ -241,7 +241,10 @@ def _yf_quote(name, symbol):
                 num = _safe_float(val)
                 if num and num > 0:
                     closes.append(num)
-                    last_date = getattr(ts, "date", lambda: None)()
+                    day = getattr(ts, "date", lambda: None)()
+                    if day is not None:
+                        last_date = day
+                        last_tz = getattr(ts, "tzinfo", None)
     except Exception as e:
         print(f"[行情] {name}({symbol}) 日线获取失败: {e}")
 
@@ -256,19 +259,30 @@ def _yf_quote(name, symbol):
     as_of = f"{last_date} 收盘" if last_date else ""
 
     if len(closes) >= 2:
-        price, prev = closes[-1], closes[-2]
-        series_pct = (price - prev) / prev * 100
+        # 先按「日线最后一根是否属于今天」判断口径：
+        #   今天这根已存在 → 昨收取前一根，实时价覆盖今天这根；
+        #   今天还没成交   → 沿用日线（上日收盘）口径，避免算成 0%。
+        today_ex = None
+        if last_tz is not None and last_date:
+            try:
+                today_ex = datetime.datetime.now(datetime.timezone.utc).astimezone(last_tz).date()
+            except Exception:
+                today_ex = None
+        has_today_bar = today_ex is not None and last_date >= today_ex
+
         if live and live_prev:
-            live_pct = (live - live_prev) / live_prev * 100
-            if abs(live_pct - series_pct) <= 0.35:
-                price, prev = live, live_prev
-                hist_vals = closes + [live]
+            if abs(live - closes[-1]) <= closes[-1] * 1e-4:
+                price, prev = closes[-1], closes[-2]
+            elif has_today_bar:
+                price, prev = live, closes[-2]
+                hist_vals = closes[:-1] + [live]
                 as_of = datetime.datetime.now(BJ_TZ).strftime("%m-%d %H:%M 实时")
             else:
-                print(
-                    f"[行情] {name}({symbol}) 实时价与日线偏离过大"
-                    f"({live_pct:+.2f}% vs {series_pct:+.2f}%)，采用日线收盘口径"
-                )
+                price, prev = live, closes[-1]
+                hist_vals = closes + [live]
+                as_of = datetime.datetime.now(BJ_TZ).strftime("%m-%d %H:%M 实时")
+        else:
+            price, prev = closes[-1], closes[-2]
     elif live and live_prev:
         price, prev = live, live_prev
         hist_vals = [live_prev, live]
@@ -276,11 +290,10 @@ def _yf_quote(name, symbol):
 
     if price is None:
         return None
-    stale_days = 0
     if last_date:
         stale_days = (datetime.datetime.now(BJ_TZ).date() - last_date).days
-    if stale_days > 5:
-        print(f"[行情] {name}({symbol}) 数据最后更新于 {last_date}，已陈旧 {stale_days} 天")
+        if stale_days > 5:
+            print(f"[行情] {name}({symbol}) 数据最后更新于 {last_date}，已陈旧 {stale_days} 天")
     return _build_quote(name, symbol, price, prev, hist_vals, as_of)
 
 
@@ -308,47 +321,57 @@ def _a_session_label():
     """区分 A 股是盘中实时还是收盘快照，避免早报把昨收标成「实时」"""
     now = datetime.datetime.now(BJ_TZ)
     trading = now.weekday() < 5 and (9, 25) <= (now.hour, now.minute) <= (15, 5)
-    return "东财实时" if trading else "东财收盘"
+    return "实时" if trading else "收盘"
 
 
-def _em_index_history(symbol):
-    """东方财富指数日线：与实时价同源，避免用 Yahoo 走势拼东财价格造成曲线失真"""
-    try:
-        df = ak.stock_zh_index_daily_em(symbol=symbol)
-        if df is None or df.empty:
-            return []
-        col = "close" if "close" in df.columns else df.columns[-1]
-        vals = [_safe_float(v) for v in df[col].tolist()]
-        return [v for v in vals if v][-8:]
-    except Exception as e:
-        print(f"[行情] 东财日线 {symbol} 获取失败: {e}")
-        return []
+# 指数快照候选源：东财数据最好但经常对云端 IP 限流，新浪作为第二主力
+_INDEX_SNAPSHOT_CALLS = (
+    ("东财", "index_zh_spot_em", {"symbol": "沪深重要指数"}),
+    ("东财", "stock_zh_index_spot_em", {}),
+    ("新浪", "index_zh_spot_sina", {}),
+    ("新浪", "stock_zh_index_spot_sina", {}),
+)
 
 
-def _em_index_spot_df():
-    """东方财富沪深指数快照，兼容 akshare 1.20.44 的接口改名。
-
-    旧名 stock_zh_index_spot_em 已被移除，继续调用会抛异常；旧代码把异常吞掉后
-    整体切到 Yahoo，导致 A 股指数长期用的是延迟/隔夜的 Yahoo 数据。
-    """
-    attempts = []
-    if hasattr(ak, "index_zh_spot_em"):
-        attempts += [
-            ("index_zh_spot_em(symbol=沪深重要指数)", lambda: ak.index_zh_spot_em(symbol="沪深重要指数")),
-            ("index_zh_spot_em()", lambda: ak.index_zh_spot_em()),
-        ]
-    if hasattr(ak, "stock_zh_index_spot_em"):
-        attempts.append(("stock_zh_index_spot_em()", lambda: ak.stock_zh_index_spot_em()))
-
-    for label, call in attempts:
+def _load_index_frames(max_sources=2):
+    """按可靠性顺序加载指数快照，最多取两个源用于交叉校验"""
+    frames = []
+    for source, fname, kwargs in _INDEX_SNAPSHOT_CALLS:
+        fn = getattr(ak, fname, None)
+        if fn is None:
+            continue
         try:
-            df = call()
-            if df is not None and not df.empty:
-                print(f"[行情] 指数快照来源: {label}（{len(df)} 行）")
-                return df
+            df = fn(**kwargs)
         except Exception as e:
-            print(f"[行情] {label} 调用失败: {type(e).__name__}: {e}")
-    return None
+            print(f"[行情] {source} {fname} 不可用: {type(e).__name__}")
+            continue
+        if df is None or df.empty:
+            continue
+        frames.append((source, df))
+        print(f"[行情] 指数快照来源: {source} {fname}（{len(df)} 行）")
+        if len(frames) >= max_sources:
+            break
+    return frames
+
+
+def _index_history(em_symbol):
+    """指数日线用于 7 日走势；东财失败时退到新浪日线，避免走势图直接消失"""
+    for fname in ("stock_zh_index_daily_em", "index_zh_daily_sina"):
+        fn = getattr(ak, fname, None)
+        if fn is None:
+            continue
+        try:
+            df = fn(symbol=em_symbol)
+            if df is None or df.empty:
+                continue
+            col = "close" if "close" in df.columns else df.columns[-1]
+            vals = [_safe_float(v) for v in df[col].tolist()]
+            vals = [v for v in vals if v]
+            if len(vals) >= 2:
+                return vals[-8:]
+        except Exception as e:
+            print(f"[行情] {fname}({em_symbol}) 失败: {type(e).__name__}")
+    return []
 
 
 def _match_index_row(df, name, code6):
@@ -366,59 +389,83 @@ def _match_index_row(df, name, code6):
     return None
 
 
+def _quote_from_index_row(name, yf_symbol, row, em_symbol):
+    """从指数快照行构造行情：展示口径以官方涨跌幅为准，再由它反推昨收保证自洽"""
+    price = _safe_float(row.get("最新价"))
+    pct_field = _safe_float(row.get("涨跌幅"))
+    prev_raw = _safe_float(row.get("昨收"))
+
+    prev = None
+    if price and pct_field is not None and pct_field > -100:
+        prev = price / (1 + pct_field / 100)
+        if prev_raw and abs((price - prev_raw) / prev_raw * 100 - pct_field) > 0.15:
+            print(
+                f"[行情] {name} 昨收字段({prev_raw:.2f})与涨跌幅({pct_field:+.2f}%)不一致，按涨跌幅反推"
+            )
+    else:
+        prev = prev_raw
+        chg = _safe_float(row.get("涨跌额"))
+        if not prev and price and chg is not None:
+            prev = price - chg
+
+    hist = _index_history(em_symbol)
+    if hist and price:
+        hist = hist[:-1] + [price]
+    return _build_quote(name, yf_symbol, price, prev, hist, _a_session_label(), "A股多源")
+
+
 def get_a_market():
-    """A 股核心指数：东方财富为主源，涨跌幅与昨收交叉校验，缺失时逐只补 Yahoo。
+    """A 股核心指数：东财 → 新浪 → Yahoo 三级源，逐只补齐并做双源交叉校验。
 
     修掉旧实现的三个问题：
-    1. 接口改名后异常被吞、整体换成 Yahoo → 改为兼容新旧接口名；
-    2. 只要有一只缺失就丢弃全部东财结果 → 改为逐只补齐；
-    3. 用 Yahoo 走势拼接东财价格 → 改为走势与价格同源（东财日线）。
+    1. 接口改名（stock_zh_index_spot_em → index_zh_spot_em）后异常被吞，整体换成 Yahoo；
+    2. 只要有一只缺失就丢弃全部结果 → 改为逐只补齐；
+    3. 用 Yahoo 走势拼接东财价格 → 改为走势与价格同源。
+    新增：东财对云端 IP 限流时自动切新浪，两个源都能取到时校验涨跌幅差异。
     """
     quotes = {}
-    df = _em_index_spot_df()
+    frames = _load_index_frames()
+    if not frames:
+        print("[行情] 东财/新浪指数接口均不可用，改用 Yahoo 备用源")
 
-    if df is not None:
-        for name, em_sym, yf_sym in A_INDEX_TARGETS:
-            code6 = re.sub(r"^(sh|sz)", "", em_sym)
+    for name, em_sym, yf_sym in A_INDEX_TARGETS:
+        code6 = re.sub(r"^(sh|sz)", "", em_sym)
+        row, src = None, ""
+        for label, df in frames:
             try:
-                row = _match_index_row(df, name, code6)
+                hit = _match_index_row(df, name, code6)
             except Exception as e:
                 print(f"[行情] {name} 行匹配异常: {e}")
-                row = None
-            if row is None:
-                print(f"[行情] 东方财富未返回 {name}({code6})，稍后用备用源补齐")
+                hit = None
+            if hit is not None:
+                row, src = hit, label
+                break
+        if row is None:
+            print(f"[行情] 快照源未返回 {name}({code6})，稍后用 Yahoo 补齐")
+            continue
+
+        # 双源交叉校验：另一个源也返回这只指数时，比较涨跌幅是否一致
+        for label, df in frames:
+            if label == src:
                 continue
+            try:
+                other = _match_index_row(df, name, code6)
+            except Exception:
+                other = None
+            if other is None:
+                continue
+            p1 = _safe_float(row.get("涨跌幅"))
+            p2 = _safe_float(other.get("涨跌幅"))
+            if p1 is not None and p2 is not None and abs(p1 - p2) > 0.3:
+                print(
+                    f"[行情] {name} 两源涨跌幅不一致：{src} {p1:+.2f}% / {label} {p2:+.2f}%，采用 {src}"
+                )
 
-            price = _safe_float(row.get("最新价"))
-            pct_field = _safe_float(row.get("涨跌幅"))
-            prev_raw = _safe_float(row.get("昨收"))
-
-            # 展示口径以东财官方涨跌幅为准，再由它反推昨收，保证价格与涨跌幅自洽
-            prev = None
-            if price and pct_field is not None and pct_field > -100:
-                prev = price / (1 + pct_field / 100)
-                if prev_raw and abs((price - prev_raw) / prev_raw * 100 - pct_field) > 0.15:
-                    print(
-                        f"[行情] {name} 昨收字段({prev_raw:.2f})与涨跌幅({pct_field:+.2f}%)"
-                        f"不一致，已按涨跌幅反推昨收"
-                    )
-            else:
-                prev = prev_raw
-                chg = _safe_float(row.get("涨跌额"))
-                if not prev and price and chg is not None:
-                    prev = price - chg
-
-            hist = _em_index_history(em_sym)
-            if hist and price:
-                hist = hist[:-1] + [price]
-
-            quote = _build_quote(name, yf_sym, price, prev, hist, _a_session_label(), "东方财富")
-            if quote:
-                quotes[name] = quote
-            else:
-                print(f"[行情] {name} 东财数值不合理，稍后用备用源补齐")
-    else:
-        print("[行情] 东方财富指数接口不可用，改用 Yahoo 备用源")
+        quote = _quote_from_index_row(name, yf_sym, row, em_sym)
+        if quote:
+            quotes[name] = quote
+        else:
+            print(f"[行情] {name} 快照数值不合理，稍后用 Yahoo 补齐")
 
     if len(quotes) < len(A_INDEX_TARGETS):
         for name, _em_sym, yf_sym in A_INDEX_TARGETS:
@@ -430,7 +477,6 @@ def get_a_market():
                 quotes[name] = quote
 
     return [quotes[n] for n, _e, _y in A_INDEX_TARGETS if n in quotes]
-
 
 
 def fetch_rss_within_hours(rss_dict, hours=12, max_per_feed=7):
