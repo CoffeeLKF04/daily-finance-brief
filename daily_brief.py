@@ -325,42 +325,88 @@ def _em_index_history(symbol):
         return []
 
 
+def _em_index_spot_df():
+    """东方财富沪深指数快照，兼容 akshare 1.20.44 的接口改名。
+
+    旧名 stock_zh_index_spot_em 已被移除，继续调用会抛异常；旧代码把异常吞掉后
+    整体切到 Yahoo，导致 A 股指数长期用的是延迟/隔夜的 Yahoo 数据。
+    """
+    attempts = []
+    if hasattr(ak, "index_zh_spot_em"):
+        attempts += [
+            ("index_zh_spot_em(symbol=沪深重要指数)", lambda: ak.index_zh_spot_em(symbol="沪深重要指数")),
+            ("index_zh_spot_em()", lambda: ak.index_zh_spot_em()),
+        ]
+    if hasattr(ak, "stock_zh_index_spot_em"):
+        attempts.append(("stock_zh_index_spot_em()", lambda: ak.stock_zh_index_spot_em()))
+
+    for label, call in attempts:
+        try:
+            df = call()
+            if df is not None and not df.empty:
+                print(f"[行情] 指数快照来源: {label}（{len(df)} 行）")
+                return df
+        except Exception as e:
+            print(f"[行情] {label} 调用失败: {type(e).__name__}: {e}")
+    return None
+
+
+def _match_index_row(df, name, code6):
+    """优先按名称精确匹配，失败再按 6 位代码匹配，兼容列名或命名变化"""
+    if "名称" in df.columns:
+        hit = df[df["名称"].astype(str).str.strip() == name]
+        if not hit.empty:
+            return hit.iloc[0]
+    for code_col in ("代码", "指数代码", "symbol"):
+        if code_col in df.columns:
+            codes = df[code_col].astype(str).str.strip()
+            hit = df[codes.str.replace(r"^(sh|sz)", "", regex=True) == code6]
+            if not hit.empty:
+                return hit.iloc[0]
+    return None
+
+
 def get_a_market():
-    """A 股核心指数：东方财富为主源，逐只校验并由昨收重算涨跌幅。
+    """A 股核心指数：东方财富为主源，涨跌幅与昨收交叉校验，缺失时逐只补 Yahoo。
 
     修掉旧实现的三个问题：
-    1. 只信「涨跌幅」字段 → 改为用「最新价 / 昨收」重算并交叉校验；
-    2. 只要有一只缺失就丢弃全部东财结果、整体换成 Yahoo → 改为逐只补齐；
+    1. 接口改名后异常被吞、整体换成 Yahoo → 改为兼容新旧接口名；
+    2. 只要有一只缺失就丢弃全部东财结果 → 改为逐只补齐；
     3. 用 Yahoo 走势拼接东财价格 → 改为走势与价格同源（东财日线）。
     """
     quotes = {}
+    df = _em_index_spot_df()
 
-    try:
-        df = ak.stock_zh_index_spot_em()
-        name_col = "名称" if "名称" in df.columns else df.columns[2]
+    if df is not None:
         for name, em_sym, yf_sym in A_INDEX_TARGETS:
-            rows = df[df[name_col].astype(str).str.strip() == name]
-            if rows.empty:
-                print(f"[行情] 东方财富未返回 {name}，稍后用备用源补齐")
+            code6 = re.sub(r"^(sh|sz)", "", em_sym)
+            try:
+                row = _match_index_row(df, name, code6)
+            except Exception as e:
+                print(f"[行情] {name} 行匹配异常: {e}")
+                row = None
+            if row is None:
+                print(f"[行情] 东方财富未返回 {name}({code6})，稍后用备用源补齐")
                 continue
-            row = rows.iloc[0]
-            price = _safe_float(row.get("最新价"))
-            pct_raw = _safe_float(row.get("涨跌幅"))
-            prev = _safe_float(row.get("昨收"))
-            if not prev:
-                chg = _safe_float(row.get("涨跌额"))
-                if price and chg is not None:
-                    prev = price - chg
-                elif price and pct_raw is not None and pct_raw > -100:
-                    prev = price / (1 + pct_raw / 100)
 
-            if price and prev:
-                pct_calc = (price - prev) / prev * 100
-                if pct_raw is not None and abs(pct_calc - pct_raw) > 0.05:
+            price = _safe_float(row.get("最新价"))
+            pct_field = _safe_float(row.get("涨跌幅"))
+            prev_raw = _safe_float(row.get("昨收"))
+
+            # 展示口径以东财官方涨跌幅为准，再由它反推昨收，保证价格与涨跌幅自洽
+            prev = None
+            if price and pct_field is not None and pct_field > -100:
+                prev = price / (1 + pct_field / 100)
+                if prev_raw and abs((price - prev_raw) / prev_raw * 100 - pct_field) > 0.15:
                     print(
-                        f"[行情] {name} 东财涨跌幅({pct_raw:+.2f}%)与昨收推算"
-                        f"({pct_calc:+.2f}%)不一致，采用昨收推算值"
+                        f"[行情] {name} 昨收字段({prev_raw:.2f})与涨跌幅({pct_field:+.2f}%)"
+                        f"不一致，已按涨跌幅反推昨收"
                     )
+            else:
+                prev = prev_raw
+                chg = _safe_float(row.get("涨跌额"))
+                if not prev and price and chg is not None:
+                    prev = price - chg
 
             hist = _em_index_history(em_sym)
             if hist and price:
@@ -371,8 +417,8 @@ def get_a_market():
                 quotes[name] = quote
             else:
                 print(f"[行情] {name} 东财数值不合理，稍后用备用源补齐")
-    except Exception as e:
-        print(f"[行情] 东方财富接口异常，切换 Yahoo 备用源: {e}")
+    else:
+        print("[行情] 东方财富指数接口不可用，改用 Yahoo 备用源")
 
     if len(quotes) < len(A_INDEX_TARGETS):
         for name, _em_sym, yf_sym in A_INDEX_TARGETS:
@@ -442,20 +488,70 @@ def fetch_rss_within_hours(rss_dict, hours=12, max_per_feed=7):
     return "\n".join(lines)
 
 
-def fetch_cls_telegraph(limit=55):
-    """抓取财联社 7x24 实时电报"""
-    lines = []
+def _cell(row, col):
+    """安全读取单元格，把 None / NaN / NaT 统一成空串"""
+    if not col:
+        return ""
     try:
-        df_cls = ak.stock_info_global_cls()
-        for _, row in df_cls.head(limit).iterrows():
-            title = str(row.get("标题", "")).strip()
-            content = str(row.get("内容", "")).strip()
-            pub_date = str(row.get("发布日期", "")).strip()
-            pub_time = str(row.get("发布时间", "")).strip()
-            ts = f"{pub_date[-5:]} {pub_time[:5]}".strip()
-            lines.append(f"[财联社 | {ts}] 标题:{title} | 正文:{content[:260]}")
-    except Exception as e:
-        print(f"[财联社] 抓取失败: {e}")
+        val = row.get(col)
+    except Exception:
+        return ""
+    if val is None:
+        return ""
+    text = str(val).strip()
+    return "" if text.lower() in ("nan", "none", "nat") else text
+
+
+def _pick_col(df, names):
+    for name in names:
+        if name in df.columns:
+            return name
+    return None
+
+
+def _call_cls_api():
+    """财联社电报接口：akshare 1.20.41 把 stock_info_global_cls 改名为 stock_news_global_cls"""
+    attempts = []
+    if hasattr(ak, "stock_news_global_cls"):
+        attempts += [
+            ("stock_news_global_cls(symbol=全部)", lambda: ak.stock_news_global_cls(symbol="全部")),
+            ("stock_news_global_cls()", lambda: ak.stock_news_global_cls()),
+        ]
+    if hasattr(ak, "stock_info_global_cls"):
+        attempts.append(("stock_info_global_cls()", lambda: ak.stock_info_global_cls()))
+    for label, call in attempts:
+        try:
+            df = call()
+            if df is not None and not df.empty:
+                print(f"[财联社] 数据来源: {label}（{len(df)} 条）")
+                return df
+        except Exception as e:
+            print(f"[财联社] {label} 调用失败: {type(e).__name__}: {e}")
+    return None
+
+
+def fetch_cls_telegraph(limit=55):
+    """抓取财联社 7x24 实时电报（接口名与列名都做兼容映射，避免改名后静默变成空数据）"""
+    df_cls = _call_cls_api()
+    if df_cls is None:
+        print("[财联社] 无可用接口，本时段国内快讯缺省")
+        return ""
+
+    title_col = _pick_col(df_cls, ["标题", "title"])
+    content_col = _pick_col(df_cls, ["内容", "正文", "摘要", "content"])
+    date_col = _pick_col(df_cls, ["发布日期", "日期", "date"])
+    time_col = _pick_col(df_cls, ["发布时间", "时间", "time"])
+
+    lines = []
+    for _, row in df_cls.head(limit).iterrows():
+        title = _cell(row, title_col)
+        content = _cell(row, content_col)
+        if not (title or content):
+            continue
+        ts = f"{_cell(row, date_col)[-5:]} {_cell(row, time_col)[:5]}".strip()
+        lines.append(f"[财联社 | {ts}] 标题:{title} | 正文:{content[:260]}")
+    if not lines:
+        print(f"[财联社] 接口返回 0 条有效快讯（列名: {list(df_cls.columns)[:8]}）")
     return "\n".join(lines)
 
 
