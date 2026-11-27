@@ -3,6 +3,7 @@ import re
 import math
 import json
 import html
+import time
 import argparse
 import calendar
 import datetime
@@ -588,12 +589,22 @@ def get_a_market():
 
     if len(quotes) < len(A_INDEX_TARGETS):
         for name, _em_sym, yf_sym, _aliases in A_INDEX_TARGETS:
-            if name in quotes or not yf_sym:
+            if name in quotes:
+                continue
+            if not yf_sym:
+                # 北证50 这类没有 Yahoo 备用代码的标的，快照源没给就只能缺着——但要说出名字
+                print(f"[行情] {name} 无 Yahoo 备用代码，本时段缺失")
                 continue
             quote = _yf_quote(name, yf_sym)
             if quote:
                 quote["source"] = "Yahoo 备用"
                 quotes[name] = quote
+            else:
+                print(f"[行情] {name} 快照源与 Yahoo 备用源均未取到有效数值，本时段缺失")
+
+    missing = [n for n, _e, _y, _a in A_INDEX_TARGETS if n not in quotes]
+    if missing:
+        print(f"[行情] A股/港股缺 {len(missing)}/{len(A_INDEX_TARGETS)} 个：{'、'.join(missing)}")
 
     return [quotes[n] for n, _e, _y, _a in A_INDEX_TARGETS if n in quotes]
 
@@ -883,9 +894,74 @@ def fetch_cn_flash(limit=90):
     return "\n".join(lines)
 
 
+def _extract_json(text):
+    """从模型输出里抠出 JSON 对象，容忍 ```json 围栏、前后寒暄、以及尾部的多余字符。
+
+    旧实现是 json.loads(content) 一把梭，模型偶尔多写一句「以上是本期内容」就整轮任务失败。
+    """
+    if not text:
+        return None
+    body = text.strip()
+    body = re.sub(r"^```(?:json)?\s*", "", body)
+    body = re.sub(r"\s*```$", "", body).strip()
+    try:
+        data = json.loads(body)
+        return data if isinstance(data, dict) else None
+    except Exception:
+        pass
+    start, end = body.find("{"), body.rfind("}")
+    if start >= 0 and end > start:
+        try:
+            data = json.loads(body[start : end + 1])
+            return data if isinstance(data, dict) else None
+        except Exception:
+            return None
+    return None
+
+
+def _call_llm_json(client, prompt, attempts=3):
+    """调用大模型并解析 JSON：网络抖动/输出不合格自动重试，全失败返回 None 由上层降级。"""
+    last_err = ""
+    for i in range(attempts):
+        try:
+            resp = client.chat.completions.create(
+                model=LLM_MODEL,
+                messages=[{"role": "user", "content": prompt}],
+                response_format={"type": "json_object"},
+                temperature=0.2,
+            )
+            data = _extract_json(resp.choices[0].message.content)
+            if data:
+                return data
+            last_err = "返回内容不是合法 JSON 对象"
+        except Exception as e:
+            last_err = f"{type(e).__name__}: {str(e)[:120]}"
+        print(f"[LLM] 第 {i + 1}/{attempts} 次调用失败：{last_err}")
+        if i + 1 < attempts:
+            time.sleep(2 * (i + 1))
+    return None
+
+
+def _fallback_llm_data(edition):
+    """大模型不可用时的降级数据：行情与页面结构照常，只把新闻区标注为暂不可用。
+
+    好处是任务不会整轮红叉——行情卡和往期入口仍然正常发布，飞书卡片也照发。
+    """
+    meta = get_edition_meta(edition)
+    return {
+        "mood": "neutral",
+        "mood_headline": f"{meta['name']} · 本期智能评级暂不可用",
+        "overview": "本期大模型评级服务暂时不可用，已保留跨市场行情数据；新闻板块请稍后重试，或从右上角下拉查看往期。",
+        "us_global_news": [],
+        "cn_a_news": [],
+        "general_news": [],
+        "_degraded": True,
+    }
+
+
 def analyze_with_llm(global_fin_raw, cn_fin_raw, general_raw, edition, official_raw=""):
     """按早报/收盘报/晚报差异化定位，调用大模型去重、精译与重磅评级"""
-    client = OpenAI(api_key=LLM_API_KEY, base_url=LLM_BASE_URL)
+    client = OpenAI(api_key=LLM_API_KEY, base_url=LLM_BASE_URL, timeout=180.0, max_retries=0)
     now_str = datetime.datetime.now(BJ_TZ).strftime("%Y-%m-%d %H:%M")
 
     if edition == "close":
@@ -955,7 +1031,8 @@ def analyze_with_llm(global_fin_raw, cn_fin_raw, general_raw, edition, official_
       "title": "高信息量中文标题（26字以内）",
       "fact": "核心事实与具体数据（70-110字）",
       "impact": "对A股对应板块或个股的催化逻辑（35-55字）",
-      "source": "来源与时间（如 财联社 · 15:10）"
+      "source": "来源与时间（如 财联社 · 15:10）",
+      "link": "提取对应的原始链接，没有则留空"
     }}
   ],
   "general_news": [
@@ -986,16 +1063,10 @@ def analyze_with_llm(global_fin_raw, cn_fin_raw, general_raw, edition, official_
 【国际时政与前沿科技信源】：
 {general_raw if general_raw else "（暂无数据）"}
 """
-    resp = client.chat.completions.create(
-        model=LLM_MODEL,
-        messages=[{"role": "user", "content": prompt}],
-        response_format={"type": "json_object"},
-        temperature=0.2,
-    )
-    content = resp.choices[0].message.content.strip()
-    if content.startswith("```"):
-        content = re.sub(r"^```(?:json)?\s*|\s*```$", "", content)
-    data = json.loads(content)
+    data = _call_llm_json(client, prompt)
+    if not data:
+        print("[LLM] 多次重试仍失败，降级为「仅行情」模式继续发布")
+        return _fallback_llm_data(edition)
     return normalize_and_sort_llm_data(data)
 
 
@@ -1698,7 +1769,7 @@ HTML_TEMPLATE = """
     <div>官方一手 · <b>美联储 / SEC / 欧洲央行</b></div>
     <div><b>彭博 · FT · 路透 · WSJ · MarketWatch · CNBC · Investing · 日经亚洲 · 南华早报</b></div>
     <div>国内快讯 · <b>财联社 · 新浪财经 · 东方财富 · 同花顺</b></div>
-    <div style="margin-top:5px">行情 __DATA_NOTE__ · 早 08:30 / 收 15:30 / 晚 22:00</div>
+    <div style="margin-top:5px">行情 __DATA_NOTE__ · 早 08:28 / 收 15:28 / 晚 21:58</div>
   </footer>
 </main>
 
@@ -1863,6 +1934,21 @@ def save_web_pages(now, edition, us_idx, tech_stocks, a_idx, macro_assets, llm_d
     # 严格按日期 + (pm > close > am) 倒序排列，保留最近 180 期（约 60 天）
     entries = sorted(set(entries), key=archive_sort_key, reverse=True)[:180]
     manifest_file.write_text(json.dumps(entries, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    # manifest 只保留 180 期，但归档 HTML 以前只增不删，会攒下一堆没人链接的孤儿文件。
+    # 这里顺带清理；keep 太小时（manifest 损坏/首次运行）不执行，避免误删整目录。
+    keep = set(entries)
+    if len(keep) >= 5:
+        removed = 0
+        for old in ARCHIVE_DIR.glob("*.html"):
+            if old.stem not in keep:
+                try:
+                    old.unlink()
+                    removed += 1
+                except OSError:
+                    pass
+        if removed:
+            print(f"[归档] 已清理 {removed} 个超出保留期的旧页面（保留 {len(keep)} 期）")
 
     index_html = render_page_html(now, edition, us_idx, tech_stocks, a_idx, macro_assets, llm_data, entries, is_archive=False)
     archive_html = render_page_html(now, edition, us_idx, tech_stocks, a_idx, macro_assets, llm_data, entries, is_archive=True)

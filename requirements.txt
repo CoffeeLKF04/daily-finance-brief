@@ -1,5 +1,7 @@
-akshare
-yfinance
-feedparser
-openai
-requests
+# 锁死版本：akshare 曾在 1.20.x 内改过接口名与列名（stock_info_global_cls → stock_news_global_cls），
+# 不锁版本会让线上任务在某个凌晨突然静默变成空数据。
+akshare==1.20.70
+yfinance==1.8.0
+feedparser==6.0.14
+openai==3.60.0
+requests==2.34.2

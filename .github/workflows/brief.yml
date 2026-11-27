@@ -17,15 +17,23 @@ on:
 permissions:
   contents: write
 
+# 定时 cron（服务器三档）与手动测试很容易撞在一起：
+# 两次运行同时 git push 会让后者 non-fast-forward 失败，而且是在烧完 LLM token 之后才失败。
+# 这里串行化——后来的排队等待，不取消正在跑的那次。
+concurrency:
+  group: daily-finance-brief
+  cancel-in-progress: false
+
 jobs:
   run-brief:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: 拉取仓库代码
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: 配置 Python 环境
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.11'
           cache: 'pip'

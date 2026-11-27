@@ -1,0 +1,514 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark" data-edition="am">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="theme-color" content="#070b14" />
+<title>全球财经与热点早报 · 2026-11-28</title>
+<style>
+  :root {
+    --bg: #080b13;
+    --bg-card: #101623;
+    --card-hi: rgba(255, 255, 255, 0.045);
+    --bg-subtle: rgba(255, 255, 255, 0.045);
+    --border: rgba(148, 163, 184, 0.12);
+    --border-strong: rgba(148, 163, 184, 0.2);
+    --text: #eef2f8;
+    --text2: #a3b0c2;
+    --text3: #6b7a8f;
+    --accent: #38bdf8;
+    --accent-soft: rgba(56, 189, 248, 0.12);
+    --edition-bg: rgba(56, 189, 248, 0.15);
+    --edition-color: #7dd3fc;
+    --up-red: #f43f5e;
+    --up-green: #10b981;
+    --amber: #f59e0b;
+    --mono: ui-monospace, "SF Mono", "Roboto Mono", Menlo, Consolas, monospace;
+  }
+  [data-edition="close"] {
+    --accent: #f59e0b;
+    --accent-soft: rgba(245, 158, 11, 0.13);
+    --edition-bg: rgba(245, 158, 11, 0.16);
+    --edition-color: #fcd34d;
+  }
+  [data-edition="pm"] {
+    --accent: #818cf8;
+    --accent-soft: rgba(129, 140, 248, 0.13);
+    --edition-bg: rgba(139, 92, 246, 0.16);
+    --edition-color: #c4b5fd;
+  }
+  [data-theme="light"] {
+    --bg: #f4f6fa;
+    --bg-card: #ffffff;
+    --card-hi: rgba(255, 255, 255, 0.9);
+    --bg-subtle: #f3f6fa;
+    --border: rgba(15, 23, 42, 0.085);
+    --border-strong: rgba(15, 23, 42, 0.16);
+    --text: #0d1626;
+    --text2: #47546a;
+    --text3: #77869b;
+    --accent: #0284c7;
+    --accent-soft: rgba(2, 132, 199, 0.09);
+    --edition-bg: rgba(2, 132, 199, 0.11);
+    --edition-color: #0369a1;
+    --up-red: #dc2626;
+    --up-green: #059669;
+    --amber: #c2740a;
+  }
+  [data-theme="light"][data-edition="close"] {
+    --accent: #b45309;
+    --accent-soft: rgba(180, 83, 9, 0.1);
+    --edition-bg: rgba(180, 83, 9, 0.12);
+    --edition-color: #92400e;
+  }
+  [data-theme="light"][data-edition="pm"] {
+    --accent: #4f46e5;
+    --accent-soft: rgba(79, 70, 229, 0.09);
+    --edition-bg: rgba(79, 70, 229, 0.12);
+    --edition-color: #4338ca;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB",
+      "Noto Sans CJK SC", "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+    padding-bottom: 10px;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 0 14px; }
+  .pg {
+    position: fixed; top: 0; left: 0;
+    height: 2px; width: 0;
+    background: linear-gradient(90deg, var(--accent), #a78bfa);
+    z-index: 99; transition: width 0.12s linear;
+  }
+
+  /* ---------- 顶栏 ---------- */
+  .hdr {
+    position: sticky; top: 0; z-index: 60;
+    background: color-mix(in srgb, var(--bg) 86%, transparent);
+    backdrop-filter: blur(16px) saturate(1.4);
+    -webkit-backdrop-filter: blur(16px) saturate(1.4);
+    border-bottom: 1px solid var(--border);
+  }
+  .hdrin { height: 46px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .hl { display: flex; align-items: center; gap: 7px; min-width: 0; }
+  .dot {
+    width: 5px; height: 5px; border-radius: 50%;
+    background: var(--accent); flex: 0 0 auto;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+  }
+  .hdate { font-family: var(--mono); font-size: 11.5px; color: var(--text2); white-space: nowrap; letter-spacing: -0.01em; }
+  .epill {
+    font-size: 10.5px; font-weight: 800; padding: 2px 8px; border-radius: 999px;
+    background: var(--edition-bg); color: var(--edition-color);
+    white-space: nowrap; letter-spacing: 0.02em;
+  }
+  .hr { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
+  select.arch {
+    max-width: 104px; height: 27px;
+    background: var(--bg-card); color: var(--text2);
+    border: 1px solid var(--border); border-radius: 8px;
+    font-size: 11px; padding: 0 2px; font-family: inherit;
+  }
+  button.icon {
+    width: 27px; height: 27px; border-radius: 8px; cursor: pointer;
+    background: var(--bg-card); color: var(--text2);
+    border: 1px solid var(--border); font-size: 12px; line-height: 1;
+    transition: border-color 0.15s ease;
+  }
+  button.icon:active { border-color: var(--accent); }
+
+  /* ---------- 头版 ---------- */
+  .hero { padding: 16px 0 12px; }
+  .kicker {
+    display: flex; align-items: center; gap: 7px;
+    font-family: var(--mono); font-size: 9.5px; font-weight: 700;
+    letter-spacing: 0.16em; color: var(--text3); text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .kicker::after {
+    content: ""; flex: 1; height: 1px;
+    background: linear-gradient(90deg, var(--border-strong), transparent);
+  }
+  .hero h1 {
+    font-size: 20px; font-weight: 800; line-height: 1.42;
+    letter-spacing: -0.015em; margin-bottom: 9px;
+    text-wrap: pretty;
+  }
+  .hmeta {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+    font-family: var(--mono); font-size: 10.5px; color: var(--text3);
+  }
+  .mood {
+    font-family: inherit; font-size: 10.5px; font-weight: 800;
+    padding: 2.5px 9px; border-radius: 999px; letter-spacing: 0.01em;
+  }
+  .mood-bullish { background: color-mix(in srgb, var(--up-red) 14%, transparent); color: var(--up-red); }
+  .mood-bearish { background: color-mix(in srgb, var(--up-green) 14%, transparent); color: var(--up-green); }
+  .mood-neutral { background: var(--accent-soft); color: var(--accent); }
+
+  /* ---------- 行情 2×2（可折叠） ---------- */
+  .mkt { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 4px 0 12px; align-items: start; }
+  .gcard {
+    position: relative; overflow: hidden;
+    background: linear-gradient(180deg, var(--card-hi), transparent 46%), var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 13px;
+  }
+  .gcard::after {
+    content: ""; position: absolute; inset: 0; border-radius: 13px;
+    pointer-events: none;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  }
+  [data-theme="light"] .gcard { box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 6px 16px -12px rgba(15, 23, 42, 0.2); }
+  [data-theme="light"] .gcard::after { box-shadow: none; }
+  .gcard > summary.gcap {
+    display: flex; align-items: center; justify-content: space-between; gap: 5px;
+    padding: 8px 10px 6px; cursor: pointer; list-style: none;
+    font-size: 10.5px; font-weight: 800; color: var(--text2);
+    letter-spacing: 0.02em; user-select: none;
+  }
+  .gcard > summary.gcap::-webkit-details-marker { display: none; }
+  .gtitle { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .gmeta { display: flex; align-items: center; gap: 4px; flex: 0 0 auto; }
+  .gtally { display: flex; gap: 3.5px; font-family: var(--mono); font-size: 9px; font-weight: 700; }
+  .gtally .tu { font-weight: 700; }
+  .gtally .td { font-weight: 700; }
+  .gcard.us .tu { color: var(--up-green); }
+  .gcard.us .td { color: var(--up-red); }
+  .gcard.cn .tu { color: var(--up-red); }
+  .gcard.cn .td { color: var(--up-green); }
+  .gtime { font-family: var(--mono); font-weight: 500; font-size: 9px; color: var(--text3); flex: 0 0 auto; }
+  .gcaret {
+    width: 0; height: 0; flex: 0 0 auto;
+    border-left: 3.5px solid transparent; border-right: 3.5px solid transparent;
+    border-top: 4px solid var(--text3);
+    transition: transform 0.22s ease;
+  }
+  .gcard[open] .gcaret { transform: rotate(180deg); }
+  .grows { padding: 0 10px 7px; }
+  .gcard:not([open]) .grows { display: none; }
+
+  .mrow {
+    position: relative;
+    display: flex; align-items: center; justify-content: space-between; gap: 4px;
+    padding: 4px 0; border-bottom: 1px solid var(--border);
+  }
+  .mrow:last-child { border-bottom: none; padding-bottom: 1px; }
+  .mrow .sparkline {
+    position: absolute; right: -1px; bottom: 2px;
+    width: 42px; height: 14px; opacity: 0.28; pointer-events: none;
+  }
+  .mname {
+    display: flex; flex-direction: column; min-width: 0;
+    font-size: 11.5px; font-weight: 600; line-height: 1.22; letter-spacing: -0.01em;
+  }
+  .mname em {
+    font-style: normal; font-family: var(--mono); font-size: 10px;
+    color: var(--text3); font-variant-numeric: tabular-nums; letter-spacing: -0.02em;
+  }
+  .mpct {
+    position: relative; z-index: 1; flex: 0 0 auto;
+    font-family: var(--mono); font-size: 10.5px; font-weight: 800;
+    font-variant-numeric: tabular-nums; letter-spacing: -0.02em;
+    padding: 1px 4.5px; border-radius: 5px;
+    background: var(--bg-subtle);
+  }
+  .pos-green, .neg-green { color: var(--up-green); }
+  .pos-red, .neg-red { color: var(--up-red); }
+  .pos-green, .neg-green { background: color-mix(in srgb, var(--up-green) 13%, transparent); }
+  .pos-red, .neg-red { background: color-mix(in srgb, var(--up-red) 13%, transparent); }
+  .flat { color: var(--text2); }
+
+  .gmore { margin-top: 1px; }
+  .gmore > summary {
+    list-style: none; cursor: pointer; user-select: none;
+    display: flex; align-items: center; gap: 4px;
+    padding: 5px 0 1px; font-size: 9.5px; font-weight: 600; color: var(--text3);
+  }
+  .gmore > summary::-webkit-details-marker { display: none; }
+  .gmore > summary::after {
+    content: "▾"; font-size: 8px; transition: transform 0.2s ease;
+  }
+  .gmore[open] > summary::after { transform: rotate(180deg); }
+  .gmore[open] > summary { color: var(--accent); }
+  .gmore-body .mrow:first-child { border-top: 1px solid var(--border); margin-top: 3px; }
+  .gend { padding-top: 5px; text-align: right; }
+  .gend .gtime { font-size: 8.5px; letter-spacing: 0.02em; }
+
+  /* ---------- 必读 chips ---------- */
+  .chips {
+    display: flex; gap: 6px; overflow-x: auto;
+    padding: 1px 0 12px; scrollbar-width: none;
+    scroll-snap-type: x proximity;
+  }
+  .chips::-webkit-scrollbar { display: none; }
+  .chip {
+    flex: 0 0 auto; max-width: 80vw; scroll-snap-align: start;
+    display: flex; align-items: center; gap: 6px;
+    padding: 7px 10px; border-radius: 10px;
+    background: linear-gradient(135deg, var(--accent-soft), transparent 70%), var(--bg-card);
+    border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--border));
+    color: var(--text); text-decoration: none; font-size: 12px; line-height: 1.4;
+  }
+  .chip:active { border-color: var(--accent); }
+  .chip b {
+    flex: 0 0 auto; font-family: var(--mono); font-size: 9.5px; font-weight: 800;
+    color: var(--amber); letter-spacing: -0.02em;
+  }
+  .chip span {
+    display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical;
+    overflow: hidden; font-weight: 500;
+  }
+  .chip i { font-style: normal; color: var(--text3); font-size: 12px; }
+
+  /* ---------- 综述 ---------- */
+  details.ov {
+    position: relative;
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 10px 12px 11px; margin-bottom: 13px;
+    overflow: hidden;
+  }
+  details.ov::before {
+    content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 2.5px;
+    background: linear-gradient(180deg, var(--accent), transparent);
+  }
+  details.ov > summary {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    cursor: pointer; list-style: none;
+    font-size: 10.5px; font-weight: 800; color: var(--accent); letter-spacing: 0.03em;
+  }
+  details.ov > summary::-webkit-details-marker { display: none; }
+  .ovh { font-weight: 500; color: var(--text3); font-size: 9.5px; letter-spacing: 0; }
+  .ovh::after { content: "展开"; }
+  .ov[open] .ovh::after { content: "收起"; }
+  .ovtext { font-size: 12.5px; line-height: 1.78; color: var(--text); margin-top: 8px; letter-spacing: 0.005em; }
+  .ov:not([open]) .ovtext { display: none; }
+
+  /* ---------- Tab ---------- */
+  .tabs {
+    position: sticky; top: 46px; z-index: 50;
+    display: flex; gap: 2px; padding: 5px 0 0;
+    background: color-mix(in srgb, var(--bg) 92%, transparent);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--border);
+  }
+  .tab {
+    position: relative; flex: 1;
+    display: flex; align-items: center; justify-content: center; gap: 4px;
+    padding: 8px 2px 9px; border-radius: 0; cursor: pointer;
+    background: transparent; border: none;
+    color: var(--text3); font-size: 12.5px; font-weight: 700;
+    font-family: inherit; letter-spacing: 0.01em;
+    transition: color 0.18s ease;
+  }
+  .tab em {
+    font-style: normal; font-family: var(--mono); font-size: 9.5px;
+    opacity: 0.8; font-weight: 600;
+  }
+  .tab.on { color: var(--accent); }
+  .tab::after {
+    content: ""; position: absolute; left: 22%; right: 22%; bottom: 0; height: 2px;
+    border-radius: 2px 2px 0 0; background: var(--accent);
+    transform: scaleX(0); transform-origin: center;
+    transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .tab.on::after { transform: scaleX(1); }
+
+  /* ---------- 面板 / 新闻条目 ---------- */
+  .panel { display: none; padding-top: 2px; }
+  .panel.on { display: block; animation: fadeUp 0.28s ease both; }
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(5px); }
+    to { opacity: 1; transform: none; }
+  }
+  .phead {
+    font-size: 10.5px; font-weight: 700; color: var(--text3);
+    padding: 11px 2px 5px; letter-spacing: 0.02em;
+  }
+  .nitem { border-bottom: 1px solid var(--border); }
+  .nitem > summary {
+    display: grid; grid-template-columns: 22px 1fr auto; gap: 7px; align-items: start;
+    padding: 11px 2px; cursor: pointer; list-style: none;
+    transition: opacity 0.15s ease;
+  }
+  .nitem > summary::-webkit-details-marker { display: none; }
+  .nitem > summary:active { opacity: 0.7; }
+  .nidx {
+    font-family: var(--mono); font-size: 9px; font-weight: 700; color: var(--text3);
+    text-align: center; line-height: 16px; height: 16px; margin-top: 2px;
+    border-radius: 5px; background: var(--bg-subtle);
+    font-variant-numeric: tabular-nums;
+  }
+  .nitem[data-score="5"] .nidx { color: var(--amber); background: color-mix(in srgb, var(--amber) 14%, transparent); }
+  .ntitle {
+    font-size: 13.5px; font-weight: 600; line-height: 1.52; letter-spacing: -0.005em;
+    text-wrap: pretty;
+  }
+  .nitem[open] .ntitle { color: var(--accent); }
+  .nside { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; padding-top: 3px; }
+  .nstars { font-size: 8px; letter-spacing: -0.4px; color: var(--amber); opacity: 0.9; }
+  .nsent { font-size: 9.5px; font-weight: 800; line-height: 1; }
+  .bull { color: var(--up-red); }
+  .bear { color: var(--up-green); }
+  .neu { color: var(--text3); }
+  .nbody { padding: 0 2px 13px 29px; animation: fadeUp 0.24s ease both; }
+  .ntag { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 7px; }
+  .ntag span {
+    font-size: 9.5px; font-weight: 600; padding: 1.5px 7px; border-radius: 5px;
+    background: var(--bg-subtle); color: var(--text2); letter-spacing: 0.01em;
+  }
+  .nfact { font-size: 12.5px; line-height: 1.76; color: var(--text2); margin-bottom: 8px; }
+  .nimpact {
+    font-size: 12px; line-height: 1.68; color: var(--text);
+    background: var(--bg-subtle); border-left: 2px solid var(--accent);
+    padding: 7px 10px; border-radius: 0 8px 8px 0; margin-bottom: 9px;
+  }
+  .nimpact b {
+    color: var(--accent); font-size: 9.5px; font-weight: 800;
+    margin-right: 6px; letter-spacing: 0.04em;
+  }
+  .nfoot { display: flex; justify-content: flex-end; font-size: 11px; }
+  .nfoot a { color: var(--accent); font-weight: 700; text-decoration: none; }
+  .nfoot .nolink { color: var(--text3); }
+  .empty { padding: 24px 8px; text-align: center; font-size: 12px; color: var(--text3); }
+
+  footer {
+    margin-top: 20px; padding: 14px 0 8px;
+    border-top: 1px solid var(--border);
+    text-align: center; font-size: 10px; line-height: 1.9; color: var(--text3);
+  }
+  footer b { color: var(--text2); font-weight: 600; }
+
+  @media (min-width: 700px) {
+    .hero h1 { font-size: 25px; }
+    .mkt { gap: 10px; }
+    .mrow { padding: 5px 0; }
+    .mname { font-size: 12.5px; }
+    .mpct { font-size: 11.5px; }
+    .ntitle { font-size: 14.5px; }
+    .nfact { font-size: 13px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+<div class="pg" id="pg"></div>
+
+<header class="hdr">
+  <div class="wrap hdrin">
+    <div class="hl">
+      <span class="dot"></span>
+      <span class="hdate">11-28 周六</span>
+      <span class="epill">☕早报</span>
+    </div>
+    <div class="hr">
+      <select class="arch" aria-label="往期早中晚报" onchange="if(this.value) window.location.href=this.value"><option value="2026-11-28-am.html" selected>11-28 ☀️早报</option><option value="2026-11-27-pm.html">11-27 🌙晚报</option><option value="2026-11-27-close.html">11-27 🌇收盘</option><option value="2026-11-27-am.html">11-27 ☀️早报</option><option value="2026-11-26-pm.html">11-26 🌙晚报</option><option value="2026-11-26-close.html">11-26 🌇收盘</option><option value="2026-11-26-am.html">11-26 ☀️早报</option><option value="2026-11-25-pm.html">11-25 🌙晚报</option><option value="2026-11-25-close.html">11-25 🌇收盘</option><option value="2026-11-25.html">11-25</option></select>
+      <button class="icon" id="tg" type="button" aria-label="切换深浅主题">☀️</button>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="hero">
+    <div class="kicker">MORNING BRIEF · 早报总览</div>
+    <h1>科技反弹与政策风险交织</h1>
+    <div class="hmeta">
+      <span class="mood mood-neutral">⚖️ 震荡分化格局</span>
+      <span>周六 00:50 CST</span>
+    </div>
+  </section>
+
+  <section class="mkt"><details class="gcard us" open>  <summary class="gcap">    <span class="gtitle">🇺🇸 美股指数</span>    <span class="gmeta"><span class="gtally"><b class="tu">6↑</b><b class="td">1↓</b></span><i class="gcaret"></i></span>  </summary>  <div class="grows"><div class="mrow"><svg class="sparkline" width="68" height="22" viewBox="0 0 68 22" fill="none" aria-hidden="true">  <defs>    <linearGradient id="sp-IXIC" x1="0" y1="0" x2="0" y2="1">      <stop offset="0%" stop-color="#10b981" stop-opacity="0.32"/>      <stop offset="100%" stop-color="#10b981" stop-opacity="0"/>    </linearGradient>  </defs>  <polygon points="0,22 0.0,2.5 11.3,7.7 22.7,19.5 34.0,5.7 45.3,9.0 56.7,10.4 68.0,6.1 68,22" fill="url(#sp-IXIC)"/>  <polyline points="0.0,2.5 11.3,7.7 22.7,19.5 34.0,5.7 45.3,9.0 56.7,10.4 68.0,6.1" stroke="#10b981" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>  <circle cx="68.0" cy="6.1" r="2.2" fill="#10b981"/></svg><span class="mname">纳斯达克<em>24,042.74</em></span><span class="mpct pos-green">+1.94%</span></div><div class="mrow"><svg class="sparkline" width="68" height="22" viewBox="0 0 68 22" fill="none" aria-hidden="true">  <defs>    <linearGradient id="sp-GSPC" x1="0" y1="0" x2="0" y2="1">      <stop offset="0%" stop-color="#10b981" stop-opacity="0.32"/>      <stop offset="100%" stop-color="#10b981" stop-opacity="0"/>    </linearGradient>  </defs>  <polygon points="0,22 0.0,2.5 11.3,8.6 22.7,19.5 34.0,6.1 45.3,7.5 56.7,8.3 68.0,3.9 68,22" fill="url(#sp-GSPC)"/>  <polyline points="0.0,2.5 11.3,8.6 22.7,19.5 34.0,6.1 45.3,7.5 56.7,8.3 68.0,3.9" stroke="#10b981" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>  <circle cx="68.0" cy="3.9" r="2.2" fill="#10b981"/></svg><span class="mname">标普500<em>7,288.75</em></span><span class="mpct pos-green">+1.48%</span></div><div class="mrow"><svg class="sparkline" width="68" height="22" viewBox="0 0 68 22" fill="none" aria-hidden="true">  <defs>    <linearGradient id="sp-DJI" x1="0" y1="0" x2="0" y2="1">      <stop offset="0%" stop-color="#10b981" stop-opacity="0.32"/>      <stop offset="100%" stop-color="#10b981" stop-opacity="0"/>    </linearGradient>  </defs>  <polygon points="0,22 0.0,6.4 11.3,13.4 22.7,19.5 34.0,10.2 45.3,7.5 56.7,6.5 68.0,2.5 68,22" fill="url(#sp-DJI)"/>  <polyline points="0.0,6.4 11.3,13.4 22.7,19.5 34.0,10.2 45.3,7.5 56.7,6.5 68.0,2.5" stroke="#10b981" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>  <circle cx="68.0" cy="2.5" r="2.2" fill="#10b981"/></svg><span class="mname">道琼斯<em>50,800.41</em></span><span class="mpct pos-green">+1.23%</span></div><div class="mrow"><svg class="sparkline" width="68" height="22" viewBox="0 0 68 22" fill="none" aria-hidden="true">  <defs>    <linearGradient id="sp-SOX" x1="0" y1="0" x2="0" y2="1">      <stop offset="0%" stop-color="#10b981" stop-opacity="0.32"/>      <stop offset="100%" stop-color="#10b981" stop-opacity="0"/>    </linearGradient>  </defs>  <polygon points="0,22 0.0,2.5 11.3,5.7 22.7,19.5 34.0,3.4 45.3,13.7 56.7,14.5 68.0,9.9 68,22" fill="url(#sp-SOX)"/>  <polyline points="0.0,2.5 11.3,5.7 22.7,19.5 34.0,3.4 45.3,13.7 56.7,14.5 68.0,9.9" stroke="#10b981" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>  <circle cx="68.0" cy="9.9" r="2.2" fill="#10b981"/></svg><span class="mname">费城半导体<em>9,109.94</em></span><span class="mpct pos-green">+3.82%</span></div><details class="gmore"><summary>展开其余 3 项</summary><div class="gmore-body"><div class="mrow"><svg class="sparkline" width="68" height="22" viewBox="0 0 68 22" fill="none" aria-hidden="true">  <defs>    <linearGradient id="sp-NDX" x1="0" y1="0" x2="0" y2="1">      <stop offset="0%" stop-color="#10b981" stop-opacity="0.32"/>      <stop offset="100%" stop-color="#10b981" stop-opacity="0"/>    </linearGradient>  </defs>  <polygon points="0,22 0.0,2.5 11.3,7.4 22.7,19.5 34.0,5.5 45.3,9.8 56.7,11.2 68.0,6.6 68,22" fill="url(#sp-NDX)"/>  <polyline points="0.0,2.5 11.3,7.4 22.7,19.5 34.0,5.5 45.3,9.8 56.7,11.2 68.0,6.6" stroke="#10b981" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>  <circle cx="68.0" cy="6.6" r="2.2" fill="#10b981"/></svg><span class="mname">纳斯达克100<em>26,606.99</em></span><span class="mpct pos-green">+2.15%</span></div><div class="mrow"><svg class="sparkline" width="68" height="22" viewBox="0 0 68 22" fill="none" aria-hidden="true">  <defs>    <linearGradient id="sp-RUT" x1="0" y1="0" x2="0" y2="1">      <stop offset="0%" stop-color="#10b981" stop-opacity="0.32"/>      <stop offset="100%" stop-color="#10b981" stop-opacity="0"/>    </linearGradient>  </defs>  <polygon points="0,22 0.0,5.6 11.3,11.8 22.7,19.5 34.0,10.3 45.3,8.7 56.7,6.7 68.0,2.5 68,22" fill="url(#sp-RUT)"/>  <polyline points="0.0,5.6 11.3,11.8 22.7,19.5 34.0,10.3 45.3,8.7 56.7,6.7 68.0,2.5" stroke="#10b981" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>  <circle cx="68.0" cy="2.5" r="2.2" fill="#10b981"/></svg><span class="mname">罗素2000<em>2,743.57</em></span><span class="mpct pos-green">+1.46%</span></div><div class="mrow"><svg class="sparkline" width="68" height="22" viewBox="0 0 68 22" fill="none" aria-hidden="true">  <defs>    <linearGradient id="sp-VIX" x1="0" y1="0" x2="0" y2="1">      <stop offset="0%" stop-color="#f43f5e" stop-opacity="0.32"/>      <stop offset="100%" stop-color="#f43f5e" stop-opacity="0"/>    </linearGradient>  </defs>  <polygon points="0,22 0.0,13.8 11.3,2.5 22.7,16.6 34.0,17.0 45.3,14.0 56.7,16.3 68.0,19.5 68,22" fill="url(#sp-VIX)"/>  <polyline points="0.0,13.8 11.3,2.5 22.7,16.6 34.0,17.0 45.3,14.0 56.7,16.3 68.0,19.5" stroke="#f43f5e" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>  <circle cx="68.0" cy="19.5" r="2.2" fill="#f43f5e"/></svg><span class="mname">VIX恐慌<em>24.70</em></span><span class="mpct neg-red">-7.84%</span></div></div></details><div class="gend"><span class="gtime">11-27 收</span></div></div></details><details class="gcard us" open>  <summary class="gcap">    <span class="gtitle">🚀 科技龙头</span>    <span class="gmeta"><span class="gtally"><b class="tu">11↑</b><b class="td">1↓</b></span><i class="gcaret"></i></span>  </summary>  <div class="grows"><div class="mrow"><svg class="sparkline" width="68" height="22" viewBox="0 0 68 22" fill="none" aria-hidden="true">  <defs>    <linearGradient id="sp-NVDA" x1="0" y1="0" x2="0" y2="1">      <stop offset="0%" stop-color="#f43f5e" stop-opacity="0.32"/>      <stop offset="100%" stop-color="#f43f5e" stop-opacity="0"/>    </linearGradient>  </defs>  <polygon points="0,22 0.0,8.6 11.3,10.7 22.7,19.5 34.0,2.5 45.3,6.7 56.7,9.3 68.0,9.3 68,22" fill="url(#sp-NVDA)"/>  <polyline points="0.0,8.6 11.3,10.7 22.7,19.5 34.0,2.5 45.3,6.7 56.7,9.3 68.0,9.3" stroke="#f43f5e" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>  <circle cx="68.0" cy="9.3" r="2.2" fill="#f43f5e"/></svg><span class="mname">英伟达<em>149.23</em></span><span class="mpct neg-red">-0.05%</span></div><div class="mrow"><svg class="sparkline" width="68" height="22" viewBox="0 0 68 22" fill="none" aria-hidden="true">  <defs>    <linearGradient id="sp-AAPL" x1="0" y1="0" x2="0" y2="1">      <stop offset="0%" stop-color="#10b981" stop-opacity="0.32"/>      <stop offset="100%" stop-color="#10b981" stop-opacity="0"/>    </linearGradient>  </defs>  <polygon points="0,22 0.0,8.6 11.3,12.2 22.7,19.5 34.0,12.3 45.3,6.8 56.7,5.2 68.0,2.5 68,22" fill="url(#sp-AAPL)"/>  <polyline points="0.0,8.6 11.3,12.2 22.7,19.5 34.0,12.3 45.3,6.8 56.7,5.2 68.0,2.5" stroke="#10b981" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>  <circle cx="68.0" cy="2.5" r="2.2" fill="#10b981"/></svg><span class="mname">苹果<em>358.02</em></span><span class="mpct pos-green">+0.69%</span></div><div class="mrow"><svg class="sparkline" width="68" height="22" viewBox="0 0 68 22" fill="none" aria-hidden="true">  <defs>    <linearGradient id="sp-MSFT" x1="0" y1="0" x2="0" y2="1">      <stop offset="0%" stop-color="#10b981" stop-opacity="0.32"/>      <stop offset="100%" stop-color="#10b981" stop-opacity="0"/>    </linearGradient>  </defs>  <polygon points="0,22 0.0,2.5 11.3,9.6 22.7,19.5 34.0,13.8 45.3,11.2 56.7,15.6 68.0,14.4 68,22" fill="url(#sp-MSFT)"/>  <polyline points="0.0,2.5 11.3,9.6 22.7,19.5 34.0,13.8 45.3,11.2 56.7,15.6 68.0,14.4" stroke="#10b981" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>  <circle cx="68.0" cy="14.4" r="2.2" fill="#10b981"/></svg><span class="mname">微软<em>491.64</em></span><span class="mpct pos-green">+0.35%</span></div><div class="mrow"><svg class="sparkline" width="68" height="22" viewBox="0 0 68 22" fill="none" aria-hidden="true">  <defs>    <linearGradient id="sp-TSLA" x1="0" y1="0" x2="0" y2="1">      <stop offset="0%" stop-color="#10b981" stop-opacity="0.32"/>      <stop offset="100%" stop-color="#10b981" stop-opacity="0"/>    </linearGradient>  </defs>  <polygon points="0,22 0.0,7.6 11.3,10.5 22.7,19.5 34.0,7.1 45.3,7.3 56.7,8.7 68.0,2.5 68,22" fill="url(#sp-TSLA)"/>  <polyline points="0.0,7.6 11.3,10.5 22.7,19.5 34.0,7.1 45.3,7.3 56.7,8.7 68.0,2.5" stroke="#10b981" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>  <circle cx="68.0" cy="2.5" r="2.2" fill="#10b981"/></svg><span class="mname">特斯拉<em>400.07</em></span><span class="mpct pos-green">+5.24%</span></div><details class="gmore"><summary>展开其余 8 项</summary><div class="gmore-body"><div class="mrow"><svg class="sparkline" width="68" height="22" viewBox="0 0 68 22" fill="none" aria-hidden="true">  <defs>    <linearGradient id="sp-GOOGL" x1="0" y1="0" x2="0" y2="1">      <stop offset="0%" stop-color="#10b981" stop-opacity="0.32"/>      <stop offset="100%" stop-color="#10b981" stop-opacity="0"/>    </linearGradient>  </defs>  <polygon points="0,22 0.0,2.5 11.3,12.2 22.7,19.5 34.0,2.8 45.3,5.9 56.7,11.8 68.0,11.2 68,22" fill="url(#sp-GOOGL)"/>  <polyline points="0.0,2.5 11.3,12.2 22.7,19.5 34.0,2.8 45.3,5.9 56.7,11.8 68.0,11.2" stroke="#10b981" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>  <circle cx="68.0" cy="11.2" r="2.2" fill="#10b981"/></svg><span class="mname">谷歌<em>273.71</em></span><span class="mpct pos-green">+0.22%</span></div><div class="mrow"><svg class="sparkline" width="68" height="22" viewBox="0 0 68 22" fill="none" aria-hidden="true">  <defs>    <linearGradient id="sp-AMZN" x1="0" y1="0" x2="0" y2="1">      <stop offset="0%" stop-color="#10b981" stop-opacity="0.32"/>      <stop offset="100%" stop-color="#10b981" stop-opacity="0"/>    </linearGradient>  </defs>  <polygon points="0,22 0.0,2.5 11.3,10.1 22.7,17.8 34.0,11.5 45.3,13.8 56.7,19.5 68.0,12.3 68,22" fill="url(#sp-AMZN)"/>  <polyline points="0.0,2.5 11.3,10.1 22.7,17.8 34.0,11.5 45.3,13.8 56.7,19.5 68.0,12.3" stroke="#10b981" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>  <circle cx="68.0" cy="12.3" r="2.2" fill="#10b981"/></svg><span class="mname">亚马逊<em>254.28</em></span><span class="mpct pos-green">+4.03%</span></div><div class="mrow"><svg class="sparkline" width="68" height="22" viewBox="0 0 68 22" fill="none" aria-hidden="true">  <defs>    <linearGradient id="sp-META" x1="0" y1="0" x2="0" y2="1">      <stop offset="0%" stop-color="#10b981" stop-opacity="0.32"/>      <stop offset="100%" stop-color="#10b981" stop-opacity="0"/>    </linearGradient>  </defs>  <polygon points="0,22 0.0,6.1 11.3,11.0 22.7,19.5 34.0,10.7 45.3,12.5 56.7,7.7 68.0,2.5 68,22" fill="url(#sp-META)"/>  <polyline points="0.0,6.1 11.3,11.0 22.7,19.5 34.0,10.7 45.3,12.5 56.7,7.7 68.0,2.5" stroke="#10b981" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>  <circle cx="68.0" cy="2.5" r="2.2" fill="#10b981"/></svg><span class="mname">Meta<em>631.48</em></span><span class="mpct pos-green">+3.54%</span></div><div class="mrow"><svg class="sparkline" width="68" height="22" viewBox="0 0 68 22" fill="none" aria-hidden="true">  <defs>    <linearGradient id="sp-AVGO" x1="0" y1="0" x2="0" y2="1">      <stop offset="0%" stop-color="#10b981" stop-opacity="0.32"/>      <stop offset="100%" stop-color="#10b981" stop-opacity="0"/>    </linearGradient>  </defs>  <polygon points="0,22 0.0,2.5 11.3,4.9 22.7,18.4 34.0,15.4 45.3,19.4 56.7,19.5 68.0,16.0 68,22" fill="url(#sp-AVGO)"/>  <polyline points="0.0,2.5 11.3,4.9 22.7,18.4 34.0,15.4 45.3,19.4 56.7,19.5 68.0,16.0" stroke="#10b981" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>  <circle cx="68.0" cy="16.0" r="2.2" fill="#10b981"/></svg><span class="mname">博通<em>311.96</em></span><span class="mpct pos-green">+3.69%</span></div><div class="mrow"><svg class="sparkline" width="68" height="22" viewBox="0 0 68 22" fill="none" aria-hidden="true">  <defs>    <linearGradient id="sp-TSM" x1="0" y1="0" x2="0" y2="1">      <stop offset="0%" stop-color="#10b981" stop-opacity="0.32"/>      <stop offset="100%" stop-color="#10b981" stop-opacity="0"/>    </linearGradient>  </defs>  <polygon points="0,22 0.0,2.9 11.3,6.9 22.7,19.5 34.0,2.5 45.3,8.0 56.7,10.6 68.0,6.4 68,22" fill="url(#sp-TSM)"/>  <polyline points="0.0,2.9 11.3,6.9 22.7,19.5 34.0,2.5 45.3,8.0 56.7,10.6 68.0,6.4" stroke="#10b981" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>  <circle cx="68.0" cy="6.4" r="2.2" fill="#10b981"/></svg><span class="mname">台积电<em>353.18</em></span><span class="mpct pos-green">+3.17%</span></div><div class="mrow"><svg class="sparkline" width="68" height="22" viewBox="0 0 68 22" fill="none" aria-hidden="true">  <defs>    <linearGradient id="sp-AMD" x1="0" y1="0" x2="0" y2="1">      <stop offset="0%" stop-color="#10b981" stop-opacity="0.32"/>      <stop offset="100%" stop-color="#10b981" stop-opacity="0"/>    </linearGradient>  </defs>  <polygon points="0,22 0.0,2.5 11.3,8.1 22.7,17.0 34.0,13.0 45.3,18.5 56.7,19.5 68.0,17.6 68,22" fill="url(#sp-AMD)"/>  <polyline points="0.0,2.5 11.3,8.1 22.7,17.0 34.0,13.0 45.3,18.5 56.7,19.5 68.0,17.6" stroke="#10b981" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>  <circle cx="68.0" cy="17.6" r="2.2" fill="#10b981"/></svg><span class="mname">AMD<em>420.09</em></span><span class="mpct pos-green">+3.46%</span></div><div class="mrow"><svg class="sparkline" width="68" height="22" viewBox="0 0 68 22" fill="none" aria-hidden="true">  <defs>    <linearGradient id="sp-MU" x1="0" y1="0" x2="0" y2="1">      <stop offset="0%" stop-color="#10b981" stop-opacity="0.32"/>      <stop offset="100%" stop-color="#10b981" stop-opacity="0"/>    </linearGradient>  </defs>  <polygon points="0,22 0.0,2.9 11.3,5.1 22.7,19.5 34.0,2.5 45.3,14.2 56.7,18.5 68.0,12.0 68,22" fill="url(#sp-MU)"/>  <polyline points="0.0,2.9 11.3,5.1 22.7,19.5 34.0,2.5 45.3,14.2 56.7,18.5 68.0,12.0" stroke="#10b981" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>  <circle cx="68.0" cy="12.0" r="2.2" fill="#10b981"/></svg><span class="mname">美光<em>644.37</em></span><span class="mpct pos-green">+7.17%</span></div><div class="mrow"><svg class="sparkline" width="68" height="22" viewBox="0 0 68 22" fill="none" aria-hidden="true">  <defs>    <linearGradient id="sp-PLTR" x1="0" y1="0" x2="0" y2="1">      <stop offset="0%" stop-color="#10b981" stop-opacity="0.32"/>      <stop offset="100%" stop-color="#10b981" stop-opacity="0"/>    </linearGradient>  </defs>  <polygon points="0,22 0.0,11.7 11.3,13.5 22.7,19.5 34.0,10.1 45.3,9.1 56.7,7.6 68.0,2.5 68,22" fill="url(#sp-PLTR)"/>  <polyline points="0.0,11.7 11.3,13.5 22.7,19.5 34.0,10.1 45.3,9.1 56.7,7.6 68.0,2.5" stroke="#10b981" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>  <circle cx="68.0" cy="2.5" r="2.2" fill="#10b981"/></svg><span class="mname">Palantir<em>172.27</em></span><span class="mpct pos-green">+5.31%</span></div></div></details><div class="gend"><span class="gtime">实时</span></div></div></details><details class="gcard cn" open>  <summary class="gcap">    <span class="gtitle">🇨🇳 A股/港股</span>    <span class="gmeta"><span class="gtally"><b class="tu">10↑</b><b class="td">0↓</b></span><i class="gcaret"></i></span>  </summary>  <div class="grows"><div class="mrow"><svg class="sparkline" width="68" height="22" viewBox="0 0 68 22" fill="none" aria-hidden="true">  <defs>    <linearGradient id="sp-000001SS" x1="0" y1="0" x2="0" y2="1">      <stop offset="0%" stop-color="#f43f5e" stop-opacity="0.32"/>      <stop offset="100%" stop-color="#f43f5e" stop-opacity="0"/>    </linearGradient>  </defs>  <polygon points="0,22 0.0,6.3 11.3,12.0 22.7,11.3 34.0,10.1 45.3,19.5 56.7,19.4 68.0,2.5 68,22" fill="url(#sp-000001SS)"/>  <polyline points="0.0,6.3 11.3,12.0 22.7,11.3 34.0,10.1 45.3,19.5 56.7,19.4 68.0,2.5" stroke="#f43f5e" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>  <circle cx="68.0" cy="2.5" r="2.2" fill="#f43f5e"/></svg><span class="mname">上证指数<em>3,606.49</em></span><span class="mpct pos-red">+3.73%</span></div><div class="mrow"><svg class="sparkline" width="68" height="22" viewBox="0 0 68 22" fill="none" aria-hidden="true">  <defs>    <linearGradient id="sp-399001SZ" x1="0" y1="0" x2="0" y2="1">      <stop offset="0%" stop-color="#f43f5e" stop-opacity="0.32"/>      <stop offset="100%" stop-color="#f43f5e" stop-opacity="0"/>    </linearGradient>  </defs>  <polygon points="0,22 0.0,7.9 11.3,15.5 22.7,10.9 34.0,11.6 45.3,19.4 56.7,19.5 68.0,2.5 68,22" fill="url(#sp-399001SZ)"/>  <polyline points="0.0,7.9 11.3,15.5 22.7,10.9 34.0,11.6 45.3,19.4 56.7,19.5 68.0,2.5" stroke="#f43f5e" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>  <circle cx="68.0" cy="2.5" r="2.2" fill="#f43f5e"/></svg><span class="mname">深证成指<em>10,814.02</em></span><span class="mpct pos-red">+7.24%</span></div><div class="mrow"><svg class="sparkline" width="68" height="22" viewBox="0 0 68 22" fill="none" aria-hidden="true">  <defs>    <linearGradient id="sp-399006SZ" x1="0" y1="0" x2="0" y2="1">      <stop offset="0%" stop-color="#f43f5e" stop-opacity="0.32"/>      <stop offset="100%" stop-color="#f43f5e" stop-opacity="0"/>    </linearGradient>  </defs>  <polygon points="0,22 0.0,12.3 11.3,17.6 22.7,13.2 34.0,13.3 45.3,19.5 56.7,19.1 68.0,2.5 68,22" fill="url(#sp-399006SZ)"/>  <polyline points="0.0,12.3 11.3,17.6 22.7,13.2 34.0,13.3 45.3,19.5 56.7,19.1 68.0,2.5" stroke="#f43f5e" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>  <circle cx="68.0" cy="2.5" r="2.2" fill="#f43f5e"/></svg><span class="mname">创业板指<em>2,443.96</em></span><span class="mpct pos-red">+11.61%</span></div><div class="mrow"><svg class="sparkline" width="68" height="22" viewBox="0 0 68 22" fill="none" aria-hidden="true">  <defs>    <linearGradient id="sp-000688SS" x1="0" y1="0" x2="0" y2="1">      <stop offset="0%" stop-color="#f43f5e" stop-opacity="0.32"/>      <stop offset="100%" stop-color="#f43f5e" stop-opacity="0"/>    </linearGradient>  </defs>  <polygon points="0,22 0.0,9.8 11.3,13.6 22.7,13.9 34.0,11.8 45.3,17.9 56.7,19.5 68.0,2.5 68,22" fill="url(#sp-000688SS)"/>  <polyline points="0.0,9.8 11.3,13.6 22.7,13.9 34.0,11.8 45.3,17.9 56.7,19.5 68.0,2.5" stroke="#f43f5e" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>  <circle cx="68.0" cy="2.5" r="2.2" fill="#f43f5e"/></svg><span class="mname">科创50<em>1,346.25</em></span><span class="mpct pos-red">+15.07%</span></div><details class="gmore"><summary>展开其余 6 项</summary><div class="gmore-body"><div class="mrow"><svg class="sparkline" width="68" height="22" viewBox="0 0 68 22" fill="none" aria-hidden="true">  <defs>    <linearGradient id="sp-000300SS" x1="0" y1="0" x2="0" y2="1">      <stop offset="0%" stop-color="#f43f5e" stop-opacity="0.32"/>      <stop offset="100%" stop-color="#f43f5e" stop-opacity="0"/>    </linearGradient>  </defs>  <polygon points="0,22 0.0,10.6 11.3,13.7 22.7,13.3 34.0,12.7 45.3,19.5 56.7,19.3 68.0,2.5 68,22" fill="url(#sp-000300SS)"/>  <polyline points="0.0,10.6 11.3,13.7 22.7,13.3 34.0,12.7 45.3,19.5 56.7,19.3 68.0,2.5" stroke="#f43f5e" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>  <circle cx="68.0" cy="2.5" r="2.2" fill="#f43f5e"/></svg><span class="mname">沪深300<em>4,063.06</em></span><span class="mpct pos-red">+4.17%</span></div><div class="mrow"><svg class="sparkline" width="68" height="22" viewBox="0 0 68 22" fill="none" aria-hidden="true">  <defs>    <linearGradient id="sp-000905SS" x1="0" y1="0" x2="0" y2="1">      <stop offset="0%" stop-color="#f43f5e" stop-opacity="0.32"/>      <stop offset="100%" stop-color="#f43f5e" stop-opacity="0"/>    </linearGradient>  </defs>  <polygon points="0,22 0.0,4.8 11.3,14.1 22.7,9.5 34.0,10.1 45.3,18.5 56.7,19.5 68.0,2.5 68,22" fill="url(#sp-000905SS)"/>  <polyline points="0.0,4.8 11.3,14.1 22.7,9.5 34.0,10.1 45.3,18.5 56.7,19.5 68.0,2.5" stroke="#f43f5e" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>  <circle cx="68.0" cy="2.5" r="2.2" fill="#f43f5e"/></svg><span class="mname">中证500<em>6,313.63</em></span><span class="mpct pos-red">+7.68%</span></div><div class="mrow"><span class="mname">中证1000<em>5,982.91</em></span><span class="mpct pos-red">+8.15%</span></div><div class="mrow"><span class="mname">上证50<em>2,834.68</em></span><span class="mpct pos-red">+2.94%</span></div><div class="mrow"><span class="mname">北证50<em>851.79</em></span><span class="mpct pos-red">+13.20%</span></div><div class="mrow"><svg class="sparkline" width="68" height="22" viewBox="0 0 68 22" fill="none" aria-hidden="true">  <defs>    <linearGradient id="sp-HSI" x1="0" y1="0" x2="0" y2="1">      <stop offset="0%" stop-color="#f43f5e" stop-opacity="0.32"/>      <stop offset="100%" stop-color="#f43f5e" stop-opacity="0"/>    </linearGradient>  </defs>  <polygon points="0,22 0.0,2.5 11.3,10.9 22.7,11.4 34.0,14.6 45.3,19.5 56.7,14.4 68.0,5.4 68,22" fill="url(#sp-HSI)"/>  <polyline points="0.0,2.5 11.3,10.9 22.7,11.4 34.0,14.6 45.3,19.5 56.7,14.4 68.0,5.4" stroke="#f43f5e" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>  <circle cx="68.0" cy="5.4" r="2.2" fill="#f43f5e"/></svg><span class="mname">恒生指数<em>22,694.77</em></span><span class="mpct pos-red">+2.11%</span></div></div></details><div class="gend"><span class="gtime">11-27 收</span></div></div></details><details class="gcard us" open>  <summary class="gcap">    <span class="gtitle">🌍 大宗外汇</span>    <span class="gmeta"><span class="gtally"><b class="tu">5↑</b><b class="td">5↓</b></span><i class="gcaret"></i></span>  </summary>  <div class="grows"><div class="mrow"><svg class="sparkline" width="68" height="22" viewBox="0 0 68 22" fill="none" aria-hidden="true">  <defs>    <linearGradient id="sp-GCF" x1="0" y1="0" x2="0" y2="1">      <stop offset="0%" stop-color="#10b981" stop-opacity="0.32"/>      <stop offset="100%" stop-color="#10b981" stop-opacity="0"/>    </linearGradient>  </defs>  <polygon points="0,22 0.0,2.5 11.3,6.7 22.7,19.5 34.0,9.3 45.3,16.0 56.7,18.0 68.0,9.1 68,22" fill="url(#sp-GCF)"/>  <polyline points="0.0,2.5 11.3,6.7 22.7,19.5 34.0,9.3 45.3,16.0 56.7,18.0 68.0,9.1" stroke="#10b981" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>  <circle cx="68.0" cy="9.1" r="2.2" fill="#10b981"/></svg><span class="mname">黄金<em>3,654.20</em></span><span class="mpct pos-green">+3.35%</span></div><div class="mrow"><svg class="sparkline" width="68" height="22" viewBox="0 0 68 22" fill="none" aria-hidden="true">  <defs>    <linearGradient id="sp-CLF" x1="0" y1="0" x2="0" y2="1">      <stop offset="0%" stop-color="#f43f5e" stop-opacity="0.32"/>      <stop offset="100%" stop-color="#f43f5e" stop-opacity="0"/>    </linearGradient>  </defs>  <polygon points="0,22 0.0,5.7 11.3,5.9 22.7,2.5 34.0,19.5 45.3,11.1 56.7,3.8 68.0,6.9 68,22" fill="url(#sp-CLF)"/>  <polyline points="0.0,5.7 11.3,5.9 22.7,2.5 34.0,19.5 45.3,11.1 56.7,3.8 68.0,6.9" stroke="#f43f5e" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>  <circle cx="68.0" cy="6.9" r="2.2" fill="#f43f5e"/></svg><span class="mname">WTI原油<em>83.00</em></span><span class="mpct neg-red">-0.81%</span></div><div class="mrow"><svg class="sparkline" width="68" height="22" viewBox="0 0 68 22" fill="none" aria-hidden="true">  <defs>    <linearGradient id="sp-BZF" x1="0" y1="0" x2="0" y2="1">      <stop offset="0%" stop-color="#f43f5e" stop-opacity="0.32"/>      <stop offset="100%" stop-color="#f43f5e" stop-opacity="0"/>    </linearGradient>  </defs>  <polygon points="0,22 0.0,11.1 11.3,11.0 22.7,9.1 34.0,19.5 45.3,12.9 56.7,2.5 68.0,17.3 68,22" fill="url(#sp-BZF)"/>  <polyline points="0.0,11.1 11.3,11.0 22.7,9.1 34.0,19.5 45.3,12.9 56.7,2.5 68.0,17.3" stroke="#f43f5e" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>  <circle cx="68.0" cy="17.3" r="2.2" fill="#f43f5e"/></svg><span class="mname">布伦特原油<em>90.06</em></span><span class="mpct neg-red">-4.81%</span></div><div class="mrow"><svg class="sparkline" width="68" height="22" viewBox="0 0 68 22" fill="none" aria-hidden="true">  <defs>    <linearGradient id="sp-SIF" x1="0" y1="0" x2="0" y2="1">      <stop offset="0%" stop-color="#10b981" stop-opacity="0.32"/>      <stop offset="100%" stop-color="#10b981" stop-opacity="0"/>    </linearGradient>  </defs>  <polygon points="0,22 0.0,2.5 11.3,4.8 22.7,16.1 34.0,8.9 45.3,17.1 56.7,19.5 68.0,7.0 68,22" fill="url(#sp-SIF)"/>  <polyline points="0.0,2.5 11.3,4.8 22.7,16.1 34.0,8.9 45.3,17.1 56.7,19.5 68.0,7.0" stroke="#10b981" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>  <circle cx="68.0" cy="7.0" r="2.2" fill="#10b981"/></svg><span class="mname">白银<em>43.68</em></span><span class="mpct pos-green">+9.06%</span></div><details class="gmore"><summary>展开其余 6 项</summary><div class="gmore-body"><div class="mrow"><svg class="sparkline" width="68" height="22" viewBox="0 0 68 22" fill="none" aria-hidden="true">  <defs>    <linearGradient id="sp-HGF" x1="0" y1="0" x2="0" y2="1">      <stop offset="0%" stop-color="#10b981" stop-opacity="0.32"/>      <stop offset="100%" stop-color="#10b981" stop-opacity="0"/>    </linearGradient>  </defs>  <polygon points="0,22 0.0,2.5 11.3,4.3 22.7,12.0 34.0,4.2 45.3,17.9 56.7,19.5 68.0,6.1 68,22" fill="url(#sp-HGF)"/>  <polyline points="0.0,2.5 11.3,4.3 22.7,12.0 34.0,4.2 45.3,17.9 56.7,19.5 68.0,6.1" stroke="#10b981" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>  <circle cx="68.0" cy="6.1" r="2.2" fill="#10b981"/></svg><span class="mname">铜<em>5.59</em></span><span class="mpct pos-green">+4.83%</span></div><div class="mrow"><svg class="sparkline" width="68" height="22" viewBox="0 0 68 22" fill="none" aria-hidden="true">  <defs>    <linearGradient id="sp-BTCUSD" x1="0" y1="0" x2="0" y2="1">      <stop offset="0%" stop-color="#f43f5e" stop-opacity="0.32"/>      <stop offset="100%" stop-color="#f43f5e" stop-opacity="0"/>    </linearGradient>  </defs>  <polygon points="0,22 0.0,15.5 11.3,3.1 22.7,2.5 34.0,19.5 45.3,12.2 56.7,10.8 68.0,15.0 68,22" fill="url(#sp-BTCUSD)"/>  <polyline points="0.0,15.5 11.3,3.1 22.7,2.5 34.0,19.5 45.3,12.2 56.7,10.8 68.0,15.0" stroke="#f43f5e" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>  <circle cx="68.0" cy="15.0" r="2.2" fill="#f43f5e"/></svg><span class="mname">BTC<em>60,136.13</em></span><span class="mpct neg-red">-0.59%</span></div><div class="mrow"><svg class="sparkline" width="68" height="22" viewBox="0 0 68 22" fill="none" aria-hidden="true">  <defs>    <linearGradient id="sp-ETHUSD" x1="0" y1="0" x2="0" y2="1">      <stop offset="0%" stop-color="#f43f5e" stop-opacity="0.32"/>      <stop offset="100%" stop-color="#f43f5e" stop-opacity="0"/>    </linearGradient>  </defs>  <polygon points="0,22 0.0,17.3 11.3,2.5 22.7,7.2 34.0,19.0 45.3,14.1 56.7,15.2 68.0,19.5 68,22" fill="url(#sp-ETHUSD)"/>  <polyline points="0.0,17.3 11.3,2.5 22.7,7.2 34.0,19.0 45.3,14.1 56.7,15.2 68.0,19.5" stroke="#f43f5e" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>  <circle cx="68.0" cy="19.5" r="2.2" fill="#f43f5e"/></svg><span class="mname">ETH<em>1,676.50</em></span><span class="mpct neg-red">-0.67%</span></div><div class="mrow"><svg class="sparkline" width="68" height="22" viewBox="0 0 68 22" fill="none" aria-hidden="true">  <defs>    <linearGradient id="sp-CNHX" x1="0" y1="0" x2="0" y2="1">      <stop offset="0%" stop-color="#f43f5e" stop-opacity="0.32"/>      <stop offset="100%" stop-color="#f43f5e" stop-opacity="0"/>    </linearGradient>  </defs>  <polygon points="0,22 0.0,2.5 68.0,19.5 68,22" fill="url(#sp-CNHX)"/>  <polyline points="0.0,2.5 68.0,19.5" stroke="#f43f5e" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>  <circle cx="68.0" cy="19.5" r="2.2" fill="#f43f5e"/></svg><span class="mname">离岸人民币<em>6.66</em></span><span class="mpct neg-red">-0.09%</span></div><div class="mrow"><svg class="sparkline" width="68" height="22" viewBox="0 0 68 22" fill="none" aria-hidden="true">  <defs>    <linearGradient id="sp-DXYNYB" x1="0" y1="0" x2="0" y2="1">      <stop offset="0%" stop-color="#10b981" stop-opacity="0.32"/>      <stop offset="100%" stop-color="#10b981" stop-opacity="0"/>    </linearGradient>  </defs>  <polygon points="0,22 0.0,14.5 11.3,13.5 22.7,15.8 34.0,2.5 45.3,15.8 56.7,19.5 68.0,10.9 68,22" fill="url(#sp-DXYNYB)"/>  <polyline points="0.0,14.5 11.3,13.5 22.7,15.8 34.0,2.5 45.3,15.8 56.7,19.5 68.0,10.9" stroke="#10b981" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>  <circle cx="68.0" cy="10.9" r="2.2" fill="#10b981"/></svg><span class="mname">美元指数<em>104.00</em></span><span class="mpct pos-green">+0.32%</span></div><div class="mrow"><svg class="sparkline" width="68" height="22" viewBox="0 0 68 22" fill="none" aria-hidden="true">  <defs>    <linearGradient id="sp-TNX" x1="0" y1="0" x2="0" y2="1">      <stop offset="0%" stop-color="#10b981" stop-opacity="0.32"/>      <stop offset="100%" stop-color="#10b981" stop-opacity="0"/>    </linearGradient>  </defs>  <polygon points="0,22 0.0,2.5 11.3,3.6 22.7,14.5 34.0,14.0 45.3,15.1 56.7,19.5 68.0,12.6 68,22" fill="url(#sp-TNX)"/>  <polyline points="0.0,2.5 11.3,3.6 22.7,14.5 34.0,14.0 45.3,15.1 56.7,19.5 68.0,12.6" stroke="#10b981" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>  <circle cx="68.0" cy="12.6" r="2.2" fill="#10b981"/></svg><span class="mname">美债10Y<em>4.94</em></span><span class="mpct pos-green">+1.82%</span></div></div></details><div class="gend"><span class="gtime">11-27 收</span></div></div></details></section>
+  <div class="chips"><a class="chip" href="#us-1"><b>🔥</b><span>美股科技股反弹纳指100一度涨2%</span><i>›</i></a><a class="chip" href="#us-2"><b>🔥</b><span>美国GDP大幅上修引发特朗普要求调查</span><i>›</i></a><a class="chip" href="#us-3"><b>★4</b><span>美元指数升破104利率预期仍偏鹰</span><i>›</i></a></div>
+
+  <details class="ov" open>
+    <summary><span>🧭 今日早报主编全景总览</span><span class="ovh"></span></summary>
+    <div class="ovtext">隔夜美股在感恩节缩短交易周收官阶段明显反弹，道指上涨约500点，纳斯达克100涨幅一度扩大至2%，存储芯片、特斯拉和中概股表现突出，但英伟达等AI核心资产仍面临估值与盈利持续性争议。宏观方面，美国三季度GDP大幅上修引发特朗普要求调查，美元指数升破104；欧元区11月通胀预计回落至3.8%，但欧洲央行官员仍释放加息信号。商品市场油价冲高后回落，黄金反弹、白银获看多观点。A股盘前重点关注AI算力、卫星数据中心、存储及机器人链，同时留意利率、能源与地缘风险。</div>
+  </details>
+
+  <div class="tabs" role="tablist"><button class="tab on" type="button" data-tab="us" role="tab">美股<em>6</em></button><button class="tab" type="button" data-tab="cn" role="tab">A股<em>5</em></button><button class="tab" type="button" data-tab="gen" role="tab">国际<em>4</em></button></div>
+  <section class="panel on" data-panel="us"><div class="phead">🇺🇸 隔夜美股与全球财经</div><details class="nitem" id="us-1" data-score="5" data-sentiment="bull" open><summary><span class="nidx">01</span><span class="ntitle">美股科技股反弹纳指100一度涨2%</span><span class="nside"><span class="nstars">★★★★★</span><span class="nsent bull">▲</span></span></summary><div class="nbody"><div class="ntag"><span>美股/科技</span><span>财联社/ CNBC市场 · 11-28 00:37</span></div><p class="nfact">感恩节后缩短交易周最后一个交易日，美股三大指数集体走强。纳斯达克100指数涨幅一度扩大至2%，标普500指数上涨1.36%，道琼斯指数上涨1.13%，市场风险偏好明显修复。</p><div class="nimpact"><b>逻辑</b>科技成长与中概股短线情绪改善，但AI交易仍处于高波动环境，反弹能否延续取决于盈利预期与利率路径。</div><div class="nfoot"><a href="https://www.cnbc.com/2026/11/26/stock-market-today-live-updates.html" target="_blank" rel="noopener noreferrer">阅读原文 ↗</a></div></div></details>
+<details class="nitem" id="us-2" data-score="5" data-sentiment="neu"><summary><span class="nidx">02</span><span class="ntitle">美国GDP大幅上修引发特朗普要求调查</span><span class="nside"><span class="nstars">★★★★★</span><span class="nsent neu">●</span></span></summary><div class="nbody"><div class="ntag"><span>宏观</span><span>CNBC世界 · 11-27 23:52</span></div><p class="nfact">美国第三季度GDP数据出现大幅上修，特朗普称该修订属于“创纪录的错误”，要求立即展开调查。市场同时面临就业数据与利率预期再定价，经济韧性与统计争议并存。</p><div class="nimpact"><b>逻辑</b>GDP上修强化经济韧性，可能压低降息预期并支撑美元，但政治化质疑增加宏观数据解读的不确定性。</div><div class="nfoot"><a href="https://www.cnbc.com/2026/11/26/trump-gdp-revision-investigation.html" target="_blank" rel="noopener noreferrer">阅读原文 ↗</a></div></div></details>
+<details class="nitem" id="us-3" data-score="4" data-sentiment="bear"><summary><span class="nidx">03</span><span class="ntitle">美元指数升破104利率预期仍偏鹰</span><span class="nside"><span class="nstars">★★★★</span><span class="nsent bear">▼</span></span></summary><div class="nbody"><div class="ntag"><span>美联储/宏观</span><span>新浪财经 · 11-28 00:00</span></div><p class="nfact">美元指数日内上涨0.21%，突破104关口。市场在科技股反弹之际仍关注美国就业数据与利率前景，美元本周保持强势，显示投资者尚未完全转向宽松交易。</p><div class="nimpact"><b>逻辑</b>美元走强对新兴市场资产和贵金属形成压制，也可能增加A股北向资金与港股科技线的汇率扰动。</div><div class="nfoot"><span class="nolink">快讯</span></div></div></details>
+<details class="nitem" id="us-4" data-score="4" data-sentiment="bear"><summary><span class="nidx">04</span><span class="ntitle">欧元区通胀或五个月来首次回落</span><span class="nside"><span class="nstars">★★★★</span><span class="nsent bear">▼</span></span></summary><div class="nbody"><div class="ntag"><span>宏观/欧洲</span><span>彭博宏观 · 11-28 00:18</span></div><p class="nfact">市场预计欧元区11月消费者价格同比上涨3.8%，低于10月的4.0%，但仍显著高于欧洲央行2%的目标。报道援引预测称，通胀放缓幅度不足以阻止欧洲央行再次加息。</p><div class="nimpact"><b>逻辑</b>通胀回落缓解部分压力，但加息预期仍限制欧洲风险资产估值，并牵动欧元、债券及全球利率交易。</div><div class="nfoot"><a href="https://www.bloomberg.com/news/articles/2026-11-27/euro-zone-inflation-is-seen-weaker-for-first-time-in-five-months" target="_blank" rel="noopener noreferrer">阅读原文 ↗</a></div></div></details>
+<details class="nitem" id="us-5" data-score="4" data-sentiment="neu"><summary><span class="nidx">05</span><span class="ntitle">油价冲高回落布油失守90美元</span><span class="nside"><span class="nstars">★★★★</span><span class="nsent neu">●</span></span></summary><div class="nbody"><div class="ntag"><span>大宗/地缘</span><span>Investing商品/新浪财经 · 11-28 00:37</span></div><p class="nfact">中东冲突引发供应担忧，原油一度获得支撑并有望录得11月首个周涨幅；但最新交易中WTI跌破83美元，报82.83美元，布伦特跌破90美元，日内下跌1.83%。</p><div class="nimpact"><b>逻辑</b>油价高位震荡将同时影响能源、化工、航运与通胀预期，A股资源品受益与成本端压力并存。</div><div class="nfoot"><a href="https://www.investing.com/news/commodities-news/brent-trades-near-months-high-as-mideast-conflict-threatens-supply-5052810" target="_blank" rel="noopener noreferrer">阅读原文 ↗</a></div></div></details>
+<details class="nitem" id="us-6" data-score="4" data-sentiment="bull"><summary><span class="nidx">06</span><span class="ntitle">SpaceX瞄准Anterix推进移动通信布局</span><span class="nside"><span class="nstars">★★★★</span><span class="nsent bull">▲</span></span></summary><div class="nbody"><div class="ntag"><span>科技/卫星</span><span>彭博市场/财联社 · 11-27 23:58</span></div><p class="nfact">彭博称，SpaceX正在寻找无线频谱资源，Anterix可能成为其下一笔交易目标。与此同时，美国FCC主席卡尔表示，太空数据中心可能成为地面数据中心的重要补充，并希望SpaceX加速推进。</p><div class="nimpact"><b>逻辑</b>卫星通信、频谱资源、太空算力与数据中心概念升温，相关主题或向A股卫星互联网和算力基础设施扩散。</div><div class="nfoot"><a href="https://www.bloomberg.com/news/articles/2026-11-27/anterix-could-be-spacex-s-next-deal-for-mobile-network-access" target="_blank" rel="noopener noreferrer">阅读原文 ↗</a></div></div></details></section>
+<section class="panel" data-panel="cn"><div class="phead">🇨🇳 A 股盘前与国内宏观</div><details class="nitem" id="cn-1" data-score="4" data-sentiment="neu"><summary><span class="nidx">01</span><span class="ntitle">央行发布人民币存贷款利率管理规定</span><span class="nside"><span class="nstars">★★★★</span><span class="nsent neu">●</span></span></summary><div class="nbody"><div class="ntag"><span>A股/政策/利率</span><span>东方财富 · 11-27 23:17</span></div><p class="nfact">央行发布《人民币存贷款利率管理规定》，相关信息由国内财经平台披露。该规定涉及人民币存款与贷款利率管理框架，市场将关注其对银行定价机制、实体融资成本及利率传导的具体影响。</p><div class="nimpact"><b>逻辑</b>银行、地产和高股息资产可能迎来估值重估，利率市场化与融资成本变化也将影响成长股风险偏好。</div><div class="nfoot"><a href="http://finance.eastmoney.com/a/202611273942078257.html" target="_blank" rel="noopener noreferrer">阅读原文 ↗</a></div></div></details>
+<details class="nitem" id="cn-2" data-score="4" data-sentiment="bull"><summary><span class="nidx">02</span><span class="ntitle">中国工业利润修复但AI制造领跑</span><span class="nside"><span class="nstars">★★★★</span><span class="nsent bull">▲</span></span></summary><div class="nbody"><div class="ntag"><span>A股/产业</span><span>CNBC经济 · 11-27 14:09</span></div><p class="nfact">数据显示，中国工业企业利润重新增长，但经济呈现明显分化：AI相关制造业和出口成为增长动力，消费与房地产投资仍然偏弱。产业利润修复主要集中于人工智能相关制造和外需链条。</p><div class="nimpact"><b>逻辑</b>算力、半导体、智能制造和出口链具备相对优势；消费与地产修复不足则限制周期板块整体弹性。</div><div class="nfoot"><a href="https://www.cnbc.com/2026/11/27/china-industrial-profits-october.html" target="_blank" rel="noopener noreferrer">阅读原文 ↗</a></div></div></details>
+<details class="nitem" id="cn-3" data-score="4" data-sentiment="bull"><summary><span class="nidx">03</span><span class="ntitle">交通运输部推进一体化货运服务体系</span><span class="nside"><span class="nstars">★★★★</span><span class="nsent bull">▲</span></span></summary><div class="nbody"><div class="ntag"><span>A股/产业/政策</span><span>东方财富 · 11-27 22:42</span></div><p class="nfact">交通运输部表示，将完善全链条、一体化的货物运输服务系统，推动货运服务体系进一步协同。政策重点指向运输组织、物流效率和综合服务能力提升，具体实施节奏仍需后续观察。</p><div class="nimpact"><b>逻辑</b>物流、智能交通、港口、公路运输及供应链数字化板块获得政策催化，关注基础设施与运营效率改善机会。</div><div class="nfoot"><a href="http://finance.eastmoney.com/a/202611273942057097.html" target="_blank" rel="noopener noreferrer">阅读原文 ↗</a></div></div></details>
+<details class="nitem" id="cn-4" data-score="4" data-sentiment="bull"><summary><span class="nidx">04</span><span class="ntitle">蔚来计划2027年布局近200家SKY门店</span><span class="nside"><span class="nstars">★★★★</span><span class="nsent bull">▲</span></span></summary><div class="nbody"><div class="ntag"><span>A股/新能源车/港股</span><span>新浪财经 · 11-28 00:03</span></div><p class="nfact">蔚来创始人李斌在广州车展表示，公司计划到2027年布局接近200家SKY综合店，同时经营蔚来、乐道和firefly三个品牌。目前已有几十家试点门店，部分传统豪华品牌经销商正在加入。</p><div class="nimpact"><b>逻辑</b>渠道扩张和多品牌协同有助于提升蔚来销售覆盖，汽车经销商、智能驾驶及高端新能源车链关注度或升温。</div><div class="nfoot"><span class="nolink">快讯</span></div></div></details>
+<details class="nitem" id="cn-5" data-score="3" data-sentiment="neu"><summary><span class="nidx">05</span><span class="ntitle">兴奋剂入刑司法解释12月1日起施行</span><span class="nside"><span class="nstars">★★★</span><span class="nsent neu">●</span></span></summary><div class="nbody"><div class="ntag"><span>A股/体育/政策</span><span>财联社 · 11-28 00:13</span></div><p class="nfact">最高人民法院、最高人民检察院发布相关司法解释，将于12月1日起施行。国家体育总局表示，解释进一步细化妨害兴奋剂管理相关犯罪认定标准，将影响反兴奋剂监管与案件办理。</p><div class="nimpact"><b>逻辑</b>体育产业治理和赛事合规要求进一步提高，相关检测、监管服务与体育运营企业需关注合规成本变化。</div><div class="nfoot"><span class="nolink">快讯</span></div></div></details></section>
+<section class="panel" data-panel="gen"><div class="phead">🌐 国际时政与前沿科技</div><details class="nitem" id="gen-1" data-score="4" data-sentiment="neu"><summary><span class="nidx">01</span><span class="ntitle">西方多国网络攻击事件接连扰动公共系统</span><span class="nside"><span class="nstars">★★★★</span><span class="nsent neu"></span></span></summary><div class="nbody"><div class="ntag"><span>国际/AI科技/网络安全</span><span>金融时报 · 11-28 00:19</span></div><p class="nfact">英国就业与养老金部门、国际足联及美国财政部等机构近期均出现系统中断或网络事件。金融时报称，随着人工智能降低攻击门槛，西方经济体对关键基础设施、公共服务和政府系统遭受持续冲击的担忧正在上升。</p><div class="nfoot"><a href="https://www.ft.com/content/6ab1172b-4f27-49f5-ad53-b384df82da77?syn-25a6b1a6=1" target="_blank" rel="noopener noreferrer">阅读原文 ↗</a></div></div></details>
+<details class="nitem" id="gen-2" data-score="4" data-sentiment="neu"><summary><span class="nidx">02</span><span class="ntitle">波兰签署3亿美元Palantir国防AI合同</span><span class="nside"><span class="nstars">★★★★</span><span class="nsent neu"></span></span></summary><div class="nbody"><div class="ntag"><span>国际/AI科技/军工</span><span>彭博科技 · 11-27 20:30</span></div><p class="nfact">波兰将采用Palantir的人工智能软件分析战场数据，合同金额约3亿美元。该交易显示，部分欧洲国家仍在扩大对美国AI国防技术的依赖，也反映AI在军事情报、数据处理和作战决策中的应用加速。</p><div class="nfoot"><a href="https://www.bloomberg.com/news/articles/2026-11-27/poland-signs-300-million-palantir-deal-to-use-ai-for-defense" target="_blank" rel="noopener noreferrer">阅读原文 ↗</a></div></div></details>
+<details class="nitem" id="gen-3" data-score="4" data-sentiment="neu"><summary><span class="nidx">03</span><span class="ntitle">AI购物代理遭亚马逊等平台限制</span><span class="nside"><span class="nstars">★★★★</span><span class="nsent neu"></span></span></summary><div class="nbody"><div class="ntag"><span>国际/AI科技/消费</span><span>CNBC科技 · 11-28 00:43</span></div><p class="nfact">OpenAI、Meta、谷歌和Instinct推出的AI购物代理正尝试替消费者搜索、比较并完成购买，但亚马逊及越来越多零售网站设置访问障碍。平台控制流量与交易入口，成为AI代理商业化落地的主要瓶颈。</p><div class="nfoot"><a href="https://www.cnbc.com/2026/11/27/ai-shopping-agents-retailer-blocks.html" target="_blank" rel="noopener noreferrer">阅读原文 ↗</a></div></div></details>
+<details class="nitem" id="gen-4" data-score="3" data-sentiment="neu"><summary><span class="nidx">04</span><span class="ntitle">日本数据中心补贴引发地方反弹</span><span class="nside"><span class="nstars">★★★</span><span class="nsent neu"></span></span></summary><div class="nbody"><div class="ntag"><span>国际/AI科技/基础设施</span><span>日经亚洲 · 11-27 16:51</span></div><p class="nfact">日本政府推动数据中心建设补贴，但地方社会开始关注项目对电力、土地、环境和居民生活的影响，相关反弹正在升温。该趋势表明，AI算力基础设施扩张除了资本与技术约束，也面临地方治理和资源分配问题。</p><div class="nfoot"><a href="https://asia.nikkei.com/business/technology/japan-s-data-center-subsidies-to-weigh-local-impact-as-backlash-grows" target="_blank" rel="noopener noreferrer">阅读原文 ↗</a></div></div></details></section>
+
+  <footer>
+    <div>官方一手 · <b>美联储 / SEC / 欧洲央行</b></div>
+    <div><b>彭博 · FT · 路透 · WSJ · MarketWatch · CNBC · Investing · 日经亚洲 · 南华早报</b></div>
+    <div>国内快讯 · <b>财联社 · 新浪财经 · 东方财富 · 同花顺</b></div>
+    <div style="margin-top:5px">行情 Yahoo / Yahoo 备用 / 东财·新浪 · 早 08:28 / 收 15:28 / 晚 21:58</div>
+  </footer>
+</main>
+
+<script>
+  (function () {
+    var root = document.documentElement;
+    var tg = document.getElementById("tg");
+    function apply(t) {
+      root.setAttribute("data-theme", t);
+      tg.textContent = t === "dark" ? "☀️" : "🌙";
+    }
+    apply(localStorage.getItem("brief-theme") || "dark");
+    tg.addEventListener("click", function () {
+      var next = root.getAttribute("data-theme") === "dark" ? "light" : "dark";
+      localStorage.setItem("brief-theme", next);
+      apply(next);
+    });
+
+    var pg = document.getElementById("pg");
+    window.addEventListener("scroll", function () {
+      var top = window.scrollY || document.documentElement.scrollTop;
+      var h = document.documentElement.scrollHeight - window.innerHeight;
+      pg.style.width = (h > 0 ? Math.min(100, (top / h) * 100) : 0) + "%";
+    }, { passive: true });
+
+    var tabs = [].slice.call(document.querySelectorAll(".tab"));
+    var panels = [].slice.call(document.querySelectorAll(".panel"));
+    function pick(key) {
+      tabs.forEach(function (t) { t.classList.toggle("on", t.dataset.tab === key); });
+      panels.forEach(function (p) { p.classList.toggle("on", p.dataset.panel === key); });
+    }
+    tabs.forEach(function (t) {
+      t.addEventListener("click", function () { pick(t.dataset.tab); });
+    });
+
+    // 必读 chip / 外部锚点：自动切到对应 Tab 并展开该条
+    function jumpToHash() {
+      var hash = window.location.hash;
+      if (!hash || hash.length < 2) return;
+      var el;
+      try { el = document.querySelector(hash); } catch (e) { return; }
+      if (!el) return;
+      var panel = el.closest(".panel");
+      if (panel) pick(panel.dataset.panel);
+      if (el.tagName === "DETAILS") el.setAttribute("open", "");
+      el.scrollIntoView({ block: "center" });
+    }
+    window.addEventListener("hashchange", jumpToHash);
+    jumpToHash();
+  })();
+</script>
+</body>
+</html>
