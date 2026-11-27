@@ -6,6 +6,7 @@ import html
 import argparse
 import calendar
 import datetime
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import requests
 import akshare as ak
@@ -28,7 +29,21 @@ DOCS_DIR = Path("docs")
 ARCHIVE_DIR = DOCS_DIR / "archive"
 CARD_CACHE_FILE = Path("latest_feishu_card.json")
 
-# 顶级全球财经一手信源
+# ============ 信源配置（全部免费、无需 Key，GitHub Actions 海外网络直连） ============
+# 一、官方一手源：政策与数据的第一发布方，权威性最高、时效最快（先于任何媒体报道）
+OFFICIAL_RSS = {
+    "美联储": [
+        "https://www.federalreserve.gov/feeds/press_all.xml",
+    ],
+    "美国SEC": [
+        "https://www.sec.gov/news/pressreleases.rss",
+    ],
+    "欧洲央行": [
+        "https://www.ecb.europa.eu/rss/press.html",
+    ],
+}
+
+# 二、全球顶级财经媒体（直连官方 RSS，不经过聚合器，时效与原文一致）
 GLOBAL_FINANCE_RSS = {
     "彭博市场": [
         "https://feeds.bloomberg.com/markets/news.rss",
@@ -37,34 +52,61 @@ GLOBAL_FINANCE_RSS = {
     "彭博宏观": [
         "https://feeds.bloomberg.com/economics/news.rss",
     ],
-    "金融时报FT": [
+    "金融时报": [
+        "https://www.ft.com/rss/home",
         "https://www.ft.com/markets?format=rss",
-        "https://www.ft.com/global-economy?format=rss",
+    ],
+    "华尔街日报": [
+        "https://feeds.a.dj.com/rss/RSSMarketsMain.xml",
+    ],
+    "道琼斯MarketWatch": [
+        "https://feeds.content.dowjones.io/public/rss/mw_topstories",
+    ],
+    "CNBC经济": [
+        "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=20910258",
+    ],
+    "CNBC市场": [
+        "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=100003114",
+    ],
+    "CNBC世界": [
+        "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=100727362",
+    ],
+    "Investing商品": [
+        "https://www.investing.com/rss/news_11.rss",
+    ],
+    "Investing经济": [
+        "https://www.investing.com/rss/news_14.rss",
     ],
     "路透商业": [
         "https://news.google.com/rss/search?q=site:reuters.com/business+when:1d&hl=en-US&gl=US&ceid=US:en",
     ],
-    "WSJ市场": [
-        "https://feeds.a.dj.com/rss/RSSMarketsMain.xml",
-    ],
-    "CNBC财经": [
-        "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=100003114",
-    ],
 }
 
-# 顶级科技与国际时政信源
+# 三、国际时政与前沿科技
 GENERAL_NEWS_RSS = {
     "彭博科技": [
         "https://feeds.bloomberg.com/technology/news.rss",
     ],
-    "路透国际": [
-        "https://news.google.com/rss/search?q=site:reuters.com/world+when:1d&hl=en-US&gl=US&ceid=US:en",
+    "CNBC科技": [
+        "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=19854910",
+    ],
+    "日经亚洲": [
+        "https://asia.nikkei.com/rss/feed/nar",
+    ],
+    "南华早报": [
+        "https://www.scmp.com/rss/92/feed",
+    ],
+    "半岛电视台": [
+        "https://www.aljazeera.com/xml/rss/all.xml",
     ],
     "BBC中文": [
         "https://feeds.bbci.co.uk/zhongwen/simp/rss.xml",
     ],
-    "CNBC科技": [
-        "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=19854910",
+    "路透国际": [
+        "https://news.google.com/rss/search?q=site:reuters.com/world+when:1d&hl=en-US&gl=US&ceid=US:en",
+    ],
+    "谷歌新闻中文财经": [
+        "https://news.google.com/rss/search?q=when:1d+%E7%BB%8F%E6%B5%8E+OR+%E8%82%A1%E5%B8%82+OR+%E5%A4%AE%E8%A1%8C&hl=zh-CN&gl=CN&ceid=CN:zh-Hans",
     ],
 }
 # ====================================================================
@@ -297,11 +339,23 @@ def _yf_quote(name, symbol):
     return _build_quote(name, symbol, price, prev, hist_vals, as_of)
 
 
-def fetch_yf_group(tickers_dict):
-    """批量获取 Yahoo 行情，单只失败不影响其余标的"""
+def fetch_yf_group(tickers_dict, workers=8):
+    """并发获取 Yahoo 行情：标的变多后串行太慢，单只失败仍不影响其余标的"""
+    items = list(tickers_dict.items())
+
+    def _work(kv):
+        name, symbol = kv
+        try:
+            return _yf_quote(name, symbol)
+        except Exception as e:
+            print(f"[行情] {name}({symbol}) 异常: {type(e).__name__}: {str(e)[:60]}")
+            return None
+
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        quotes = list(pool.map(_work, items))
+
     results = []
-    for name, symbol in tickers_dict.items():
-        quote = _yf_quote(name, symbol)
+    for (name, symbol), quote in zip(items, quotes):
         if quote:
             results.append(quote)
         else:
@@ -309,12 +363,62 @@ def fetch_yf_group(tickers_dict):
     return results
 
 
+# A 股/港股核心指数：(显示名, 国内源代码, Yahoo 代码, 快照别名)
+# 前 4 个会额外拉日线画走势线，其余只出数值，避免请求数暴涨
 A_INDEX_TARGETS = [
-    ("上证指数", "sh000001", "000001.SS"),
-    ("深证成指", "sz399001", "399001.SZ"),
-    ("创业板指", "sz399006", "399006.SZ"),
-    ("沪深300", "sh000300", "000300.SS"),
+    ("上证指数", "sh000001", "000001.SS", ["上证指数", "上证综指"]),
+    ("深证成指", "sz399001", "399001.SZ", ["深证成指"]),
+    ("创业板指", "sz399006", "399006.SZ", ["创业板指"]),
+    ("科创50", "sh000688", "000688.SS", ["科创50", "科创板50"]),
+    ("沪深300", "sh000300", "000300.SS", ["沪深300"]),
+    ("中证500", "sh000905", "000905.SS", ["中证500"]),
+    ("中证1000", "sh000852", "000852.SS", ["中证1000"]),
+    ("上证50", "sh000016", "000016.SS", ["上证50"]),
+    ("北证50", "bj899050", "", ["北证50"]),
+    ("恒生指数", "hkHSI", "^HSI", ["恒生指数"]),
+    ("恒生科技", "hkHSTECH", "^HSTECH", ["恒生科技指数", "恒生科技"]),
 ]
+
+# 美股核心指数
+US_INDEX_TARGETS = {
+    "纳斯达克": "^IXIC",
+    "标普500": "^GSPC",
+    "道琼斯": "^DJI",
+    "费城半导体": "^SOX",
+    "纳斯达克100": "^NDX",
+    "罗素2000": "^RUT",
+    "VIX恐慌": "^VIX",
+}
+
+# 美股重点个股（七巨头 + AI 算力链 + 高关注度标的）
+US_STOCK_TARGETS = {
+    "英伟达": "NVDA",
+    "苹果": "AAPL",
+    "微软": "MSFT",
+    "特斯拉": "TSLA",
+    "谷歌": "GOOGL",
+    "亚马逊": "AMZN",
+    "Meta": "META",
+    "博通": "AVGO",
+    "台积电": "TSM",
+    "AMD": "AMD",
+    "美光": "MU",
+    "Palantir": "PLTR",
+}
+
+# 大宗 · 加密 · 汇率 · 利率
+MACRO_TARGETS = {
+    "黄金": "GC=F",
+    "WTI原油": "CL=F",
+    "布伦特原油": "BZ=F",
+    "白银": "SI=F",
+    "铜": "HG=F",
+    "BTC": "BTC-USD",
+    "ETH": "ETH-USD",
+    "离岸人民币": "CNH=X",
+    "美元指数": "DX-Y.NYB",
+    "美债10Y": "^TNX",
+}
 
 
 def _a_as_of(last_day=""):
@@ -381,22 +485,31 @@ def _index_history(em_symbol):
     return [], ""
 
 
-def _match_index_row(df, name, code6):
-    """优先按名称精确匹配，失败再按 6 位代码匹配，兼容列名或命名变化"""
+def _match_index_row(df, aliases, code6):
+    """优先按名称（含别名）精确匹配，失败再按代码匹配，兼容列名或命名变化"""
     if "名称" in df.columns:
-        hit = df[df["名称"].astype(str).str.strip() == name]
-        if not hit.empty:
-            return hit.iloc[0]
+        names = df["名称"].astype(str).str.strip()
+        for alias in aliases:
+            hit = df[names == alias]
+            if not hit.empty:
+                return hit.iloc[0]
+        # 名称里包含别名（如「恒生科技指数」含「恒生科技」），放在最后兜底
+        for alias in aliases:
+            if len(alias) < 3:
+                continue
+            hit = df[names.str.contains(alias, regex=False, na=False)]
+            if not hit.empty:
+                return hit.iloc[0]
     for code_col in ("代码", "指数代码", "symbol"):
         if code_col in df.columns:
-            codes = df[code_col].astype(str).str.strip()
-            hit = df[codes.str.replace(r"^(sh|sz)", "", regex=True) == code6]
+            codes = df[code_col].astype(str).str.strip().str.replace(r"^(sh|sz|bj|hk)", "", regex=True)
+            hit = df[codes == code6]
             if not hit.empty:
                 return hit.iloc[0]
     return None
 
 
-def _quote_from_index_row(name, yf_symbol, row, em_symbol):
+def _quote_from_index_row(name, yf_symbol, row, em_symbol, want_history=True):
     """从指数快照行构造行情：展示口径以官方涨跌幅为准，再由它反推昨收保证自洽"""
     price = _safe_float(row.get("最新价"))
     pct_field = _safe_float(row.get("涨跌幅"))
@@ -415,32 +528,31 @@ def _quote_from_index_row(name, yf_symbol, row, em_symbol):
         if not prev and price and chg is not None:
             prev = price - chg
 
-    hist, last_day = _index_history(em_symbol)
-    if hist and price:
-        hist = hist[:-1] + [price]
+    hist, last_day = ([], "")
+    if want_history:
+        hist, last_day = _index_history(em_symbol)
+        if hist and price:
+            hist = hist[:-1] + [price]
     return _build_quote(name, yf_symbol, price, prev, hist, _a_as_of(last_day), "东财·新浪")
 
 
 def get_a_market():
-    """A 股核心指数：东财 → 新浪 → Yahoo 三级源，逐只补齐并做双源交叉校验。
+    """A 股/港股核心指数：东财 → 新浪 → Yahoo 三级源，逐只补齐并做双源交叉校验。
 
-    修掉旧实现的三个问题：
-    1. 接口改名（stock_zh_index_spot_em → index_zh_spot_em）后异常被吞，整体换成 Yahoo；
-    2. 只要有一只缺失就丢弃全部结果 → 改为逐只补齐；
-    3. 用 Yahoo 走势拼接东财价格 → 改为走势与价格同源。
-    新增：东财对云端 IP 限流时自动切新浪，两个源都能取到时校验涨跌幅差异。
+    指数数量增加后，只为靠前的几个标的拉日线画走势线，其余只取快照数值，
+    避免单个快照源 + 每只一条日线的请求量把运行时间拉长。
     """
     quotes = {}
     frames = _load_index_frames()
     if not frames:
         print("[行情] 东财/新浪指数接口均不可用，改用 Yahoo 备用源")
 
-    for name, em_sym, yf_sym in A_INDEX_TARGETS:
-        code6 = re.sub(r"^(sh|sz)", "", em_sym)
+    for idx, (name, em_sym, yf_sym, aliases) in enumerate(A_INDEX_TARGETS):
+        code6 = re.sub(r"^(sh|sz|bj|hk)", "", em_sym)
         row, src = None, ""
         for label, df in frames:
             try:
-                hit = _match_index_row(df, name, code6)
+                hit = _match_index_row(df, aliases, code6)
             except Exception as e:
                 print(f"[行情] {name} 行匹配异常: {e}")
                 hit = None
@@ -456,7 +568,7 @@ def get_a_market():
             if label == src:
                 continue
             try:
-                other = _match_index_row(df, name, code6)
+                other = _match_index_row(df, aliases, code6)
             except Exception:
                 other = None
             if other is None:
@@ -468,76 +580,89 @@ def get_a_market():
                     f"[行情] {name} 两源涨跌幅不一致：{src} {p1:+.2f}% / {label} {p2:+.2f}%，采用 {src}"
                 )
 
-        quote = _quote_from_index_row(name, yf_sym, row, em_sym)
+        quote = _quote_from_index_row(name, yf_sym, row, em_sym, want_history=(idx < 6))
         if quote:
             quotes[name] = quote
         else:
             print(f"[行情] {name} 快照数值不合理，稍后用 Yahoo 补齐")
 
     if len(quotes) < len(A_INDEX_TARGETS):
-        for name, _em_sym, yf_sym in A_INDEX_TARGETS:
-            if name in quotes:
+        for name, _em_sym, yf_sym, _aliases in A_INDEX_TARGETS:
+            if name in quotes or not yf_sym:
                 continue
             quote = _yf_quote(name, yf_sym)
             if quote:
                 quote["source"] = "Yahoo 备用"
                 quotes[name] = quote
 
-    return [quotes[n] for n, _e, _y in A_INDEX_TARGETS if n in quotes]
+    return [quotes[n] for n, _e, _y, _a in A_INDEX_TARGETS if n in quotes]
 
 
 def fetch_rss_within_hours(rss_dict, hours=12, max_per_feed=7):
-    """抓取指定时间窗口内的顶级 RSS 信源并按时间倒序排列（若条目过少自动放宽至 24h）"""
+    """抓取指定时间窗口内的 RSS 信源并按时间倒序排列（条目过少时自动放宽到 24h）。
+
+    信源扩展到二十多组后逐条串行请求会明显拖慢任务，这里每组一个线程并发拉取，
+    总耗时取决于最慢的那个源，单个源失败只影响自己。
+    """
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+
+    def _fetch_one(pair):
+        source_name, urls = pair
+        if isinstance(urls, str):
+            urls = [urls]
+        parsed = []
+        for url in urls:
+            try:
+                resp = requests.get(url, headers=HEADERS, timeout=12)
+                resp.raise_for_status()
+                feed = feedparser.parse(resp.content)
+                for entry in feed.entries:
+                    ts_struct = entry.get("published_parsed") or entry.get("updated_parsed")
+                    ts = calendar.timegm(ts_struct) if ts_struct else None
+                    parsed.append((
+                        ts,
+                        clean_html(entry.get("title", "")),
+                        clean_html(entry.get("summary", entry.get("description", "")))[:240],
+                        (entry.get("link") or "").strip(),
+                    ))
+                if parsed:
+                    break
+            except Exception as e:
+                print(f"[RSS] {source_name} 抓取失败: {type(e).__name__}: {str(e)[:60]}")
+        return source_name, parsed
+
     def _collect(window_hours):
-        now_utc = datetime.datetime.now(datetime.timezone.utc)
-        cutoff = now_utc - datetime.timedelta(hours=window_hours)
-        all_lines = []
+        cutoff_ts = (now_utc - datetime.timedelta(hours=window_hours)).timestamp()
+        pairs = list(rss_dict.items())
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            batches = list(pool.map(_fetch_one, pairs))
 
-        for source_name, urls in rss_dict.items():
-            if isinstance(urls, str):
-                urls = [urls]
-
-            parsed_items = []
-            for url in urls:
-                try:
-                    resp = requests.get(url, headers=HEADERS, timeout=12)
-                    resp.raise_for_status()
-                    feed = feedparser.parse(resp.content)
-                    for entry in feed.entries:
-                        time_struct = entry.get("published_parsed") or entry.get("updated_parsed")
-                        if time_struct:
-                            pub_dt = datetime.datetime.fromtimestamp(
-                                calendar.timegm(time_struct), tz=datetime.timezone.utc
-                            )
-                            if pub_dt < cutoff:
-                                continue
-                            pub_str = pub_dt.astimezone(BJ_TZ).strftime("%m-%d %H:%M")
-                        else:
-                            pub_dt = now_utc - datetime.timedelta(hours=window_hours / 2)
-                            pub_str = f"{window_hours}h内"
-
-                        title = clean_html(entry.get("title", ""))
-                        summary = clean_html(entry.get("summary", entry.get("description", "")))[:240]
-                        link = entry.get("link", "").strip()
-                        if title:
-                            parsed_items.append((pub_dt, pub_str, title, summary, link))
-
-                    if parsed_items:
-                        break
-                except Exception as e:
-                    print(f"[RSS] {source_name} 抓取失败: {e}")
-
-            parsed_items.sort(key=lambda x: x[0], reverse=True)
-            for _, pub_str, title, summary, link in parsed_items[:max_per_feed]:
-                all_lines.append(
-                    f"[{source_name} | {pub_str}] 标题:{title} | 摘要:{summary} | 链接:{link}"
-                )
-        return all_lines
+        lines = []
+        for source_name, parsed in batches:
+            if not parsed:
+                print(f"[RSS] {source_name} 无可用条目")
+                continue
+            kept = []
+            for ts, title, summary, link in parsed:
+                if not title:
+                    continue
+                # 没有发布时间戳的源（如某些付费墙 RSS）按窗口内处理，避免被整体丢掉
+                if ts is not None and ts < cutoff_ts:
+                    continue
+                kept.append((ts or (now_utc - datetime.timedelta(hours=window_hours / 2)).timestamp(),
+                             title, summary, link))
+            kept.sort(key=lambda x: x[0], reverse=True)
+            print(f"[RSS] {source_name} 命中 {len(kept)} 条")
+            for ts, title, summary, link in kept[:max_per_feed]:
+                pub_str = datetime.datetime.fromtimestamp(ts, tz=BJ_TZ).strftime("%m-%d %H:%M")
+                lines.append(f"[{source_name} | {pub_str}] 标题:{title} | 摘要:{summary} | 链接:{link}")
+        return lines
 
     lines = _collect(hours)
     if len(lines) < 8 and hours < 24:
         print(f"[RSS] {hours}h 内条目较少({len(lines)}条)，自动放宽至 24h 补足...")
         lines = _collect(24)
+    print(f"[RSS] 本次共注入 {len(lines)} 条")
     return "\n".join(lines)
 
 
@@ -584,31 +709,181 @@ def _call_cls_api():
 
 
 def fetch_cls_telegraph(limit=55):
-    """抓取财联社 7x24 实时电报（接口名与列名都做兼容映射，避免改名后静默变成空数据）"""
+    """财联社 7x24 实时电报（接口名与列名都做兼容映射，避免改名后静默变成空数据）"""
     df_cls = _call_cls_api()
     if df_cls is None:
-        print("[财联社] 无可用接口，本时段国内快讯缺省")
-        return ""
+        print("[财联社] 无可用接口")
+        return []
 
     title_col = _pick_col(df_cls, ["标题", "title"])
     content_col = _pick_col(df_cls, ["内容", "正文", "摘要", "content"])
     date_col = _pick_col(df_cls, ["发布日期", "日期", "date"])
     time_col = _pick_col(df_cls, ["发布时间", "时间", "time"])
 
-    lines = []
+    items = []
     for _, row in df_cls.head(limit).iterrows():
         title = _cell(row, title_col)
         content = _cell(row, content_col)
-        if not (title or content):
+        text = title or content
+        if not text:
             continue
+        if title and content and title not in content:
+            text = f"{title}｜{content}"
         ts = f"{_cell(row, date_col)[-5:]} {_cell(row, time_col)[:5]}".strip()
-        lines.append(f"[财联社 | {ts}] 标题:{title} | 正文:{content[:260]}")
-    if not lines:
-        print(f"[财联社] 接口返回 0 条有效快讯（列名: {list(df_cls.columns)[:8]}）")
+        items.append({"source": "财联社", "ts": ts, "text": text, "link": ""})
+    print(f"[财联社] 有效快讯 {len(items)} 条")
+    return items
+
+
+def _norm_ts(raw):
+    """把各家五花八门的时间统一成 MM-DD HH:MM，便于跨源混排"""
+    text = str(raw or "").strip()
+    if not text:
+        return ""
+    if re.fullmatch(r"\d{10}", text):
+        try:
+            return datetime.datetime.fromtimestamp(int(text), BJ_TZ).strftime("%m-%d %H:%M")
+        except Exception:
+            return ""
+    m = re.search(r"(\d{1,2})-(\d{1,2})[ T](\d{1,2}):(\d{2})", text)
+    if m:
+        return f"{int(m.group(1)):02d}-{int(m.group(2)):02d} {int(m.group(3)):02d}:{m.group(4)}"
+    m = re.search(r"(\d{1,2}):(\d{2})", text)
+    if m:
+        return f"{datetime.datetime.now(BJ_TZ).strftime('%m-%d')} {int(m.group(1)):02d}:{m.group(2)}"
+    return ""
+
+
+def fetch_sina_7x24(limit=30):
+    """新浪财经 7x24 全球直播：国内宏观与市场快讯的第二主力源"""
+    url = "https://zhibo.sina.com.cn/api/zhibo/feed?page=1&page_size=50&zhibo_id=152&tag_id=0"
+    try:
+        r = requests.get(url, headers=HEADERS, timeout=12)
+        r.raise_for_status()
+        payload = r.json()
+        feed = (((payload.get("result") or {}).get("data") or {}).get("feed") or {}).get("list") or []
+    except Exception as e:
+        print(f"[新浪7x24] 抓取失败: {type(e).__name__}: {str(e)[:60]}")
+        return []
+    items = []
+    for row in feed[:limit]:
+        text = clean_html(row.get("rich_text") or row.get("content") or "")
+        if not text:
+            continue
+        items.append({"source": "新浪财经", "ts": _norm_ts(row.get("create_time")), "text": text, "link": ""})
+    print(f"[新浪7x24] 有效快讯 {len(items)} 条")
+    return items
+
+
+def fetch_em_flash(limit=25):
+    """东方财富 7x24 快讯（老版 JSONP 接口，对云端 IP 限流较少）"""
+    url = "https://newsapi.eastmoney.com/kuaixun/v1/getlist_102_ajaxResult_50_1_.html"
+    try:
+        r = requests.get(url, headers=HEADERS, timeout=12)
+        r.raise_for_status()
+        body = r.text
+        start, end = body.find("{"), body.rfind("}")
+        if start < 0 or end <= start:
+            raise ValueError("返回体不是 JSONP")
+        payload = json.loads(body[start : end + 1])
+        rows = payload.get("LivesList") or []
+    except Exception as e:
+        print(f"[东财快讯] 抓取失败: {type(e).__name__}: {str(e)[:60]}")
+        return []
+    items = []
+    for row in rows[:limit]:
+        title = (row.get("title") or "").strip()
+        digest = clean_html(row.get("digest") or "")
+        text = f"{title}｜{digest}" if title and digest and title not in digest else (title or digest)
+        if not text:
+            continue
+        items.append({
+            "source": "东方财富",
+            "ts": _norm_ts(row.get("showtime")),
+            "text": text,
+            "link": row.get("url_unique") or "",
+        })
+    print(f"[东财快讯] 有效快讯 {len(items)} 条")
+    return items
+
+
+def fetch_ths_flash(limit=25):
+    """同花顺 7x24 快讯"""
+    url = "https://news.10jqka.com.cn/tapp/news/push/stock/?page=1&tag=&track=website&pagesize=40"
+    try:
+        r = requests.get(url, headers=HEADERS, timeout=12)
+        r.raise_for_status()
+        payload = r.json()
+        rows = ((payload.get("data") or {}).get("list")) or []
+    except Exception as e:
+        print(f"[同花顺] 抓取失败: {type(e).__name__}: {str(e)[:60]}")
+        return []
+    items = []
+    for row in rows[:limit]:
+        title = (row.get("title") or "").strip()
+        digest = clean_html(row.get("digest") or "")
+        text = f"{title}｜{digest}" if title and digest and title not in digest else (title or digest)
+        if not text:
+            continue
+        items.append({
+            "source": "同花顺",
+            "ts": _norm_ts(row.get("rtime") or row.get("ctime")),
+            "text": text,
+            "link": row.get("url") or "",
+        })
+    print(f"[同花顺] 有效快讯 {len(items)} 条")
+    return items
+
+
+def _dedup_key(text):
+    """去重指纹：去掉标点空格后取前 34 字，能吃掉「同一事件不同源」的转载"""
+    core = re.sub(r"[\s\W_]+", "", text or "")
+    return core[:34]
+
+
+def fetch_cn_flash(limit=90):
+    """国内快讯多源聚合：财联社 / 新浪 / 东财 / 同花顺，去重后按时间混排。
+
+    单一信源一旦接口变动或限流就会整段空白，多源交叉后既补足覆盖面，也能相互印证。
+    """
+    collectors = (
+        ("财联社", lambda: fetch_cls_telegraph(limit=60)),
+        ("新浪", lambda: fetch_sina_7x24(limit=35)),
+        ("东财", lambda: fetch_em_flash(limit=30)),
+        ("同花顺", lambda: fetch_ths_flash(limit=30)),
+    )
+    merged, seen, stat = [], set(), {}
+    for label, fn in collectors:
+        try:
+            batch = fn() or []
+        except Exception as e:
+            print(f"[国内快讯] {label} 异常: {type(e).__name__}: {str(e)[:60]}")
+            batch = []
+        stat[label] = len(batch)
+        for item in batch:
+            key = _dedup_key(item["text"])
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            merged.append(item)
+
+    # 按时间倒序，缺少时间的排在后面，保证「刚刚发生」的排前面
+    def _sort_key(item):
+        ts = item.get("ts") or ""
+        return (ts != "", ts)
+
+    merged.sort(key=_sort_key, reverse=True)
+    merged = merged[:limit]
+
+    print(f"[国内快讯] 各源命中 {stat} → 去重后 {len(merged)} 条")
+    lines = []
+    for item in merged:
+        link = f" | 链接:{item['link']}" if item.get("link") else ""
+        lines.append(f"[{item['source']} | {item['ts']}] {item['text'][:280]}{link}")
     return "\n".join(lines)
 
 
-def analyze_with_llm(global_fin_raw, cn_fin_raw, general_raw, edition):
+def analyze_with_llm(global_fin_raw, cn_fin_raw, general_raw, edition, official_raw=""):
     """按早报/收盘报/晚报差异化定位，调用大模型去重、精译与重磅评级"""
     client = OpenAI(api_key=LLM_API_KEY, base_url=LLM_BASE_URL)
     now_str = datetime.datetime.now(BJ_TZ).strftime("%Y-%m-%d %H:%M")
@@ -643,7 +918,12 @@ def analyze_with_llm(global_fin_raw, cn_fin_raw, general_raw, edition):
     prompt = f"""你是一位华尔街见闻与彭博风格的资深财经总编。当前北京时间：{now_str}。
 {role_focus}
 
-请基于以下顶级权威信源（彭博社、金融时报、路透社、WSJ、CNBC、财联社、BBC），合并去重同类事件，将英文报道精准翻译为专业中文，并按【重磅程度】严格评分排序。
+请基于以下信源（美联储/SEC/欧洲央行官方公告、彭博、金融时报、路透、WSJ、MarketWatch、CNBC、Investing、日经亚洲、南华早报、财联社、新浪财经、东方财富、同花顺）合并去重同类事件，将英文报道精准翻译为专业中文，并按【重磅程度】严格评分排序。
+
+【信源权重规则（重要）】
+- 官方一手源（美联储、SEC、欧洲央行）的公告是所有媒体转述的源头，遇到同一事件的官方版本与媒体报道版本，以官方口径为准，并在 source 里标注为「美联储」等官方名称。
+- 多家媒体同日报道同一件事时，合并为一条，取信息量最大的版本，不要拆成多条凑数。
+- 国内快讯源（财联社/新浪/东方财富/同花顺）常有「一句话电报」，若无实质新增信息则不要单独立条；只挑出真正有政策、数据、公司公告含量的事件。
 
 【重磅程度评分标准（score，1~5 整数，务必拉开区分度，不要全部打 5 分）】：
 - 5 分（核弹/头版级）：美联储或主要央行重磅政策、CPI/非农/GDP等关键宏观数据、万亿美元科技巨头（英伟达/苹果/微软等）财报或重大突发、关税/地缘重大冲击、或同时被多家权威媒体交叉报道的超级事件（全篇通常 2~4 条）。
@@ -694,10 +974,13 @@ def analyze_with_llm(global_fin_raw, cn_fin_raw, general_raw, edition):
 1. 这是每日{brief_type}：{count_req} 每个列表内按 score 从高到低排列。
 2. 严禁编造数据或链接，所有事实必须来自下方原始素材。
 
+【官方一手公告（美联储 / SEC / 欧洲央行，最高权威，优先采用）】：
+{official_raw if official_raw else "（本时段无新公告）"}
+
 【全球与美股顶级财经信源】：
 {global_fin_raw if global_fin_raw else "（暂无数据）"}
 
-【国内财联社 7x24 实时电报】：
+【国内 7x24 快讯（财联社 / 新浪财经 / 东方财富 / 同花顺 多源去重混排）】：
 {cn_fin_raw if cn_fin_raw else "（暂无数据）"}
 
 【国际时政与前沿科技信源】：
@@ -782,8 +1065,12 @@ def _as_of_label(items):
     return raw[:6]
 
 
-def render_market_group_html(title, data, is_us=True):
-    """紧凑行情组卡：每行「名称 + 价格 / 涨跌幅」，7 日走势线作为右侧淡背景"""
+def render_market_group_html(title, data, is_us=True, preview=4):
+    """行情组卡：可整组折叠；默认只露前 preview 行，其余收进「展开其余 N 项」。
+
+    标的变多后（A股/港股 11、美股指数 7、重点个股 12、大宗 10）如果一次性铺开，
+    手机端会重新变成长页面。这里用两层折叠保住首屏密度，同时保留看全部的能力。
+    """
     pos_cls, neg_cls = ("pos-green", "neg-red") if is_us else ("pos-red", "neg-green")
     stroke_map = {
         "pos-green": "#10b981",
@@ -806,14 +1093,30 @@ def render_market_group_html(title, data, is_us=True):
             f'</div>'
         )
     if not rows:
-        rows.append('<div class="mrow"><span class="mname" style="color:var(--text-muted)">暂无数据</span></div>')
+        rows.append('<div class="mrow"><span class="mname" style="color:var(--text3)">暂无数据</span></div>')
+
+    head_rows, rest_rows = rows[:preview], rows[preview:]
+    up = sum(1 for i in data if i["pct"] > 0.005)
+    down = sum(1 for i in data if i["pct"] < -0.005)
+    tally = f'<span class="gtally"><b class="tu">{up}↑</b><b class="td">{down}↓</b></span>' if data else ""
     note = _as_of_label(data)
     note_html = f'<span class="gtime">{esc(note)}</span>' if note else ""
+
+    more = ""
+    if rest_rows:
+        more = (
+            f'<details class="gmore"><summary>展开其余 {len(rest_rows)} 项</summary>'
+            f'<div class="gmore-body">{"".join(rest_rows)}</div></details>'
+        )
+    tail = f'<div class="gend">{note_html}</div>' if note_html else ""
     return (
-        f'<div class="gcard">'
-        f'  <div class="gcap"><span>{esc(title)}</span>{note_html}</div>'
-        f'  {"".join(rows)}'
-        f'</div>'
+        f'<details class="gcard {"us" if is_us else "cn"}" open>'
+        f'  <summary class="gcap">'
+        f'    <span class="gtitle">{esc(title)}</span>'
+        f'    <span class="gmeta">{tally}<i class="gcaret"></i></span>'
+        f'  </summary>'
+        f'  <div class="grows">{"".join(head_rows)}{more}{tail}</div>'
+        f'</details>'
     )
 
 
@@ -959,13 +1262,15 @@ HTML_TEMPLATE = """
 <title>__FULL_NAME__ · __DATE_STR__</title>
 <style>
   :root {
-    --bg: #070b14;
-    --bg-card: #0e1626;
-    --bg-subtle: rgba(255, 255, 255, 0.04);
-    --border: rgba(148, 163, 184, 0.14);
-    --text: #f1f5f9;
-    --text2: #94a3b8;
-    --text3: #64748b;
+    --bg: #080b13;
+    --bg-card: #101623;
+    --card-hi: rgba(255, 255, 255, 0.045);
+    --bg-subtle: rgba(255, 255, 255, 0.045);
+    --border: rgba(148, 163, 184, 0.12);
+    --border-strong: rgba(148, 163, 184, 0.2);
+    --text: #eef2f8;
+    --text2: #a3b0c2;
+    --text3: #6b7a8f;
     --accent: #38bdf8;
     --accent-soft: rgba(56, 189, 248, 0.12);
     --edition-bg: rgba(56, 189, 248, 0.15);
@@ -973,7 +1278,7 @@ HTML_TEMPLATE = """
     --up-red: #f43f5e;
     --up-green: #10b981;
     --amber: #f59e0b;
-    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --mono: ui-monospace, "SF Mono", "Roboto Mono", Menlo, Consolas, monospace;
   }
   [data-edition="close"] {
     --accent: #f59e0b;
@@ -988,233 +1293,366 @@ HTML_TEMPLATE = """
     --edition-color: #c4b5fd;
   }
   [data-theme="light"] {
-    --bg: #f2f4f8;
+    --bg: #f4f6fa;
     --bg-card: #ffffff;
-    --bg-subtle: #f5f7fa;
-    --border: rgba(15, 23, 42, 0.09);
-    --text: #0f172a;
-    --text2: #475569;
-    --text3: #7b8a9e;
+    --card-hi: rgba(255, 255, 255, 0.9);
+    --bg-subtle: #f3f6fa;
+    --border: rgba(15, 23, 42, 0.085);
+    --border-strong: rgba(15, 23, 42, 0.16);
+    --text: #0d1626;
+    --text2: #47546a;
+    --text3: #77869b;
     --accent: #0284c7;
-    --accent-soft: rgba(2, 132, 199, 0.1);
+    --accent-soft: rgba(2, 132, 199, 0.09);
     --edition-bg: rgba(2, 132, 199, 0.11);
     --edition-color: #0369a1;
-    --up-red: #e11d48;
+    --up-red: #dc2626;
     --up-green: #059669;
-    --amber: #d97706;
+    --amber: #c2740a;
   }
   [data-theme="light"][data-edition="close"] {
-    --accent: #d97706;
-    --accent-soft: rgba(217, 119, 6, 0.11);
-    --edition-bg: rgba(217, 119, 6, 0.12);
-    --edition-color: #b45309;
+    --accent: #b45309;
+    --accent-soft: rgba(180, 83, 9, 0.1);
+    --edition-bg: rgba(180, 83, 9, 0.12);
+    --edition-color: #92400e;
   }
   [data-theme="light"][data-edition="pm"] {
     --accent: #4f46e5;
-    --accent-soft: rgba(79, 70, 229, 0.1);
+    --accent-soft: rgba(79, 70, 229, 0.09);
     --edition-bg: rgba(79, 70, 229, 0.12);
     --edition-color: #4338ca;
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { -webkit-text-size-adjust: 100%; }
   body {
-    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB",
+      "Noto Sans CJK SC", "Microsoft YaHei", sans-serif;
     background: var(--bg);
     color: var(--text);
     font-size: 14px;
-    line-height: 1.6;
+    line-height: 1.62;
     -webkit-font-smoothing: antialiased;
-    -webkit-text-size-adjust: 100%;
-    padding-bottom: 8px;
+    padding-bottom: 10px;
   }
   .wrap { max-width: 720px; margin: 0 auto; padding: 0 14px; }
   .pg {
     position: fixed; top: 0; left: 0;
     height: 2px; width: 0;
-    background: linear-gradient(90deg, var(--accent), #818cf8);
-    z-index: 99; transition: width 0.1s linear;
+    background: linear-gradient(90deg, var(--accent), #a78bfa);
+    z-index: 99; transition: width 0.12s linear;
   }
 
   /* ---------- 顶栏 ---------- */
   .hdr {
     position: sticky; top: 0; z-index: 60;
-    background: color-mix(in srgb, var(--bg) 84%, transparent);
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
+    background: color-mix(in srgb, var(--bg) 86%, transparent);
+    backdrop-filter: blur(16px) saturate(1.4);
+    -webkit-backdrop-filter: blur(16px) saturate(1.4);
     border-bottom: 1px solid var(--border);
   }
   .hdrin { height: 46px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
   .hl { display: flex; align-items: center; gap: 7px; min-width: 0; }
-  .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex: 0 0 auto; }
-  .hdate { font-family: var(--mono); font-size: 12px; color: var(--text2); white-space: nowrap; }
+  .dot {
+    width: 5px; height: 5px; border-radius: 50%;
+    background: var(--accent); flex: 0 0 auto;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+  }
+  .hdate { font-family: var(--mono); font-size: 11.5px; color: var(--text2); white-space: nowrap; letter-spacing: -0.01em; }
   .epill {
-    font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 999px;
-    background: var(--edition-bg); color: var(--edition-color); white-space: nowrap;
+    font-size: 10.5px; font-weight: 800; padding: 2px 8px; border-radius: 999px;
+    background: var(--edition-bg); color: var(--edition-color);
+    white-space: nowrap; letter-spacing: 0.02em;
   }
   .hr { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
   select.arch {
-    max-width: 104px; height: 26px;
+    max-width: 104px; height: 27px;
     background: var(--bg-card); color: var(--text2);
-    border: 1px solid var(--border); border-radius: 7px;
-    font-size: 11px; padding: 0 2px;
+    border: 1px solid var(--border); border-radius: 8px;
+    font-size: 11px; padding: 0 2px; font-family: inherit;
   }
   button.icon {
-    width: 26px; height: 26px; border-radius: 7px; cursor: pointer;
+    width: 27px; height: 27px; border-radius: 8px; cursor: pointer;
     background: var(--bg-card); color: var(--text2);
     border: 1px solid var(--border); font-size: 12px; line-height: 1;
+    transition: border-color 0.15s ease;
   }
+  button.icon:active { border-color: var(--accent); }
 
   /* ---------- 头版 ---------- */
-  .hero { padding: 14px 0 10px; }
-  .hero h1 {
-    font-size: 19px; font-weight: 800; line-height: 1.45; letter-spacing: -0.2px;
-    margin-bottom: 7px;
+  .hero { padding: 16px 0 12px; }
+  .kicker {
+    display: flex; align-items: center; gap: 7px;
+    font-family: var(--mono); font-size: 9.5px; font-weight: 700;
+    letter-spacing: 0.16em; color: var(--text3); text-transform: uppercase;
+    margin-bottom: 8px;
   }
-  .hmeta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-family: var(--mono); font-size: 11px; color: var(--text3); }
-  .mood { font-family: -apple-system, sans-serif; font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 999px; }
-  .mood-bullish { background: rgba(244, 63, 94, 0.14); color: var(--up-red); }
-  .mood-bearish { background: rgba(16, 185, 129, 0.14); color: var(--up-green); }
+  .kicker::after {
+    content: ""; flex: 1; height: 1px;
+    background: linear-gradient(90deg, var(--border-strong), transparent);
+  }
+  .hero h1 {
+    font-size: 20px; font-weight: 800; line-height: 1.42;
+    letter-spacing: -0.015em; margin-bottom: 9px;
+    text-wrap: pretty;
+  }
+  .hmeta {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+    font-family: var(--mono); font-size: 10.5px; color: var(--text3);
+  }
+  .mood {
+    font-family: inherit; font-size: 10.5px; font-weight: 800;
+    padding: 2.5px 9px; border-radius: 999px; letter-spacing: 0.01em;
+  }
+  .mood-bullish { background: color-mix(in srgb, var(--up-red) 14%, transparent); color: var(--up-red); }
+  .mood-bearish { background: color-mix(in srgb, var(--up-green) 14%, transparent); color: var(--up-green); }
   .mood-neutral { background: var(--accent-soft); color: var(--accent); }
 
-  /* ---------- 行情 2×2 ---------- */
-  .mkt { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 6px 0 10px; }
+  /* ---------- 行情 2×2（可折叠） ---------- */
+  .mkt { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 4px 0 12px; align-items: start; }
   .gcard {
     position: relative; overflow: hidden;
-    background: var(--bg-card); border: 1px solid var(--border);
-    border-radius: 11px; padding: 8px 9px 9px;
+    background: linear-gradient(180deg, var(--card-hi), transparent 46%), var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 13px;
   }
-  .gcap {
-    display: flex; align-items: center; justify-content: space-between; gap: 4px;
-    font-size: 10.5px; font-weight: 700; color: var(--text3);
-    margin-bottom: 4px; letter-spacing: 0.2px;
+  .gcard::after {
+    content: ""; position: absolute; inset: 0; border-radius: 13px;
+    pointer-events: none;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
   }
-  .gcap > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .gtime { font-family: var(--mono); font-weight: 500; font-size: 9.5px; opacity: 0.75; flex: 0 0 auto; }
+  [data-theme="light"] .gcard { box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 6px 16px -12px rgba(15, 23, 42, 0.2); }
+  [data-theme="light"] .gcard::after { box-shadow: none; }
+  .gcard > summary.gcap {
+    display: flex; align-items: center; justify-content: space-between; gap: 5px;
+    padding: 8px 10px 6px; cursor: pointer; list-style: none;
+    font-size: 10.5px; font-weight: 800; color: var(--text2);
+    letter-spacing: 0.02em; user-select: none;
+  }
+  .gcard > summary.gcap::-webkit-details-marker { display: none; }
+  .gtitle { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .gmeta { display: flex; align-items: center; gap: 4px; flex: 0 0 auto; }
+  .gtally { display: flex; gap: 3.5px; font-family: var(--mono); font-size: 9px; font-weight: 700; }
+  .gtally .tu { font-weight: 700; }
+  .gtally .td { font-weight: 700; }
+  .gcard.us .tu { color: var(--up-green); }
+  .gcard.us .td { color: var(--up-red); }
+  .gcard.cn .tu { color: var(--up-red); }
+  .gcard.cn .td { color: var(--up-green); }
+  .gtime { font-family: var(--mono); font-weight: 500; font-size: 9px; color: var(--text3); flex: 0 0 auto; }
+  .gcaret {
+    width: 0; height: 0; flex: 0 0 auto;
+    border-left: 3.5px solid transparent; border-right: 3.5px solid transparent;
+    border-top: 4px solid var(--text3);
+    transition: transform 0.22s ease;
+  }
+  .gcard[open] .gcaret { transform: rotate(180deg); }
+  .grows { padding: 0 10px 7px; }
+  .gcard:not([open]) .grows { display: none; }
+
   .mrow {
     position: relative;
     display: flex; align-items: center; justify-content: space-between; gap: 4px;
-    padding: 3.5px 0; border-bottom: 1px dashed var(--border);
+    padding: 4px 0; border-bottom: 1px solid var(--border);
   }
-  .mrow:last-child { border-bottom: none; padding-bottom: 0; }
+  .mrow:last-child { border-bottom: none; padding-bottom: 1px; }
   .mrow .sparkline {
-    position: absolute; right: -2px; bottom: 1px;
-    width: 44px; height: 15px; opacity: 0.3; pointer-events: none;
+    position: absolute; right: -1px; bottom: 2px;
+    width: 42px; height: 14px; opacity: 0.28; pointer-events: none;
   }
   .mname {
     display: flex; flex-direction: column; min-width: 0;
-    font-size: 12px; font-weight: 600; line-height: 1.25;
+    font-size: 11.5px; font-weight: 600; line-height: 1.22; letter-spacing: -0.01em;
   }
   .mname em {
     font-style: normal; font-family: var(--mono); font-size: 10px;
-    color: var(--text3); font-variant-numeric: tabular-nums;
+    color: var(--text3); font-variant-numeric: tabular-nums; letter-spacing: -0.02em;
   }
   .mpct {
     position: relative; z-index: 1; flex: 0 0 auto;
-    font-family: var(--mono); font-size: 12px; font-weight: 800;
-    font-variant-numeric: tabular-nums;
+    font-family: var(--mono); font-size: 10.5px; font-weight: 800;
+    font-variant-numeric: tabular-nums; letter-spacing: -0.02em;
+    padding: 1px 4.5px; border-radius: 5px;
+    background: var(--bg-subtle);
   }
   .pos-green, .neg-green { color: var(--up-green); }
   .pos-red, .neg-red { color: var(--up-red); }
+  .pos-green, .neg-green { background: color-mix(in srgb, var(--up-green) 13%, transparent); }
+  .pos-red, .neg-red { background: color-mix(in srgb, var(--up-red) 13%, transparent); }
   .flat { color: var(--text2); }
 
+  .gmore { margin-top: 1px; }
+  .gmore > summary {
+    list-style: none; cursor: pointer; user-select: none;
+    display: flex; align-items: center; gap: 4px;
+    padding: 5px 0 1px; font-size: 9.5px; font-weight: 600; color: var(--text3);
+  }
+  .gmore > summary::-webkit-details-marker { display: none; }
+  .gmore > summary::after {
+    content: "▾"; font-size: 8px; transition: transform 0.2s ease;
+  }
+  .gmore[open] > summary::after { transform: rotate(180deg); }
+  .gmore[open] > summary { color: var(--accent); }
+  .gmore-body .mrow:first-child { border-top: 1px solid var(--border); margin-top: 3px; }
+  .gend { padding-top: 5px; text-align: right; }
+  .gend .gtime { font-size: 8.5px; letter-spacing: 0.02em; }
+
   /* ---------- 必读 chips ---------- */
-  .chips { display: flex; gap: 6px; overflow-x: auto; padding: 2px 0 10px; scrollbar-width: none; }
+  .chips {
+    display: flex; gap: 6px; overflow-x: auto;
+    padding: 1px 0 12px; scrollbar-width: none;
+    scroll-snap-type: x proximity;
+  }
   .chips::-webkit-scrollbar { display: none; }
   .chip {
-    flex: 0 0 auto; max-width: 82vw;
+    flex: 0 0 auto; max-width: 80vw; scroll-snap-align: start;
     display: flex; align-items: center; gap: 6px;
-    padding: 6px 9px; border-radius: 9px;
-    background: var(--bg-card); border: 1px solid var(--border);
+    padding: 7px 10px; border-radius: 10px;
+    background: linear-gradient(135deg, var(--accent-soft), transparent 70%), var(--bg-card);
+    border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--border));
     color: var(--text); text-decoration: none; font-size: 12px; line-height: 1.4;
   }
-  .chip b { flex: 0 0 auto; font-family: var(--mono); font-size: 10px; color: var(--amber); }
-  .chip span { display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
-  .chip i { font-style: normal; color: var(--text3); font-size: 13px; }
+  .chip:active { border-color: var(--accent); }
+  .chip b {
+    flex: 0 0 auto; font-family: var(--mono); font-size: 9.5px; font-weight: 800;
+    color: var(--amber); letter-spacing: -0.02em;
+  }
+  .chip span {
+    display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical;
+    overflow: hidden; font-weight: 500;
+  }
+  .chip i { font-style: normal; color: var(--text3); font-size: 12px; }
 
   /* ---------- 综述 ---------- */
   details.ov {
+    position: relative;
     background: var(--bg-card); border: 1px solid var(--border);
-    border-left: 3px solid var(--accent); border-radius: 10px;
-    padding: 9px 11px; margin-bottom: 12px;
+    border-radius: 12px; padding: 10px 12px 11px; margin-bottom: 13px;
+    overflow: hidden;
+  }
+  details.ov::before {
+    content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 2.5px;
+    background: linear-gradient(180deg, var(--accent), transparent);
   }
   details.ov > summary {
     display: flex; align-items: center; justify-content: space-between; gap: 8px;
     cursor: pointer; list-style: none;
-    font-size: 11px; font-weight: 800; color: var(--accent); letter-spacing: 0.3px;
+    font-size: 10.5px; font-weight: 800; color: var(--accent); letter-spacing: 0.03em;
   }
   details.ov > summary::-webkit-details-marker { display: none; }
-  .ovh { font-weight: 500; color: var(--text3); font-size: 10px; }
+  .ovh { font-weight: 500; color: var(--text3); font-size: 9.5px; letter-spacing: 0; }
   .ovh::after { content: "展开"; }
   .ov[open] .ovh::after { content: "收起"; }
-  .ovtext { font-size: 13px; line-height: 1.72; color: var(--text); margin-top: 7px; }
+  .ovtext { font-size: 12.5px; line-height: 1.78; color: var(--text); margin-top: 8px; letter-spacing: 0.005em; }
   .ov:not([open]) .ovtext { display: none; }
 
   /* ---------- Tab ---------- */
   .tabs {
     position: sticky; top: 46px; z-index: 50;
-    display: flex; gap: 4px; padding: 6px 0;
-    background: color-mix(in srgb, var(--bg) 90%, transparent);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    display: flex; gap: 2px; padding: 5px 0 0;
+    background: color-mix(in srgb, var(--bg) 92%, transparent);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
     border-bottom: 1px solid var(--border);
   }
   .tab {
-    flex: 1; display: flex; align-items: center; justify-content: center; gap: 4px;
-    padding: 6px 2px; border-radius: 8px; cursor: pointer;
-    background: transparent; border: 1px solid transparent;
-    color: var(--text2); font-size: 12.5px; font-weight: 700;
-    font-family: inherit;
+    position: relative; flex: 1;
+    display: flex; align-items: center; justify-content: center; gap: 4px;
+    padding: 8px 2px 9px; border-radius: 0; cursor: pointer;
+    background: transparent; border: none;
+    color: var(--text3); font-size: 12.5px; font-weight: 700;
+    font-family: inherit; letter-spacing: 0.01em;
+    transition: color 0.18s ease;
   }
-  .tab em { font-style: normal; font-family: var(--mono); font-size: 10px; opacity: 0.7; }
-  .tab.on { background: var(--accent-soft); color: var(--accent); border-color: color-mix(in srgb, var(--accent) 30%, transparent); }
+  .tab em {
+    font-style: normal; font-family: var(--mono); font-size: 9.5px;
+    opacity: 0.8; font-weight: 600;
+  }
+  .tab.on { color: var(--accent); }
+  .tab::after {
+    content: ""; position: absolute; left: 22%; right: 22%; bottom: 0; height: 2px;
+    border-radius: 2px 2px 0 0; background: var(--accent);
+    transform: scaleX(0); transform-origin: center;
+    transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .tab.on::after { transform: scaleX(1); }
 
   /* ---------- 面板 / 新闻条目 ---------- */
-  .panel { display: none; padding-top: 4px; }
-  .panel.on { display: block; }
-  .phead { font-size: 11px; font-weight: 700; color: var(--text3); padding: 8px 2px 4px; }
+  .panel { display: none; padding-top: 2px; }
+  .panel.on { display: block; animation: fadeUp 0.28s ease both; }
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(5px); }
+    to { opacity: 1; transform: none; }
+  }
+  .phead {
+    font-size: 10.5px; font-weight: 700; color: var(--text3);
+    padding: 11px 2px 5px; letter-spacing: 0.02em;
+  }
   .nitem { border-bottom: 1px solid var(--border); }
   .nitem > summary {
-    display: grid; grid-template-columns: 20px 1fr auto; gap: 6px; align-items: start;
-    padding: 10px 2px; cursor: pointer; list-style: none;
+    display: grid; grid-template-columns: 22px 1fr auto; gap: 7px; align-items: start;
+    padding: 11px 2px; cursor: pointer; list-style: none;
+    transition: opacity 0.15s ease;
   }
   .nitem > summary::-webkit-details-marker { display: none; }
-  .nidx { font-family: var(--mono); font-size: 10px; color: var(--text3); padding-top: 3px; }
-  .ntitle { font-size: 14px; font-weight: 600; line-height: 1.5; }
+  .nitem > summary:active { opacity: 0.7; }
+  .nidx {
+    font-family: var(--mono); font-size: 9px; font-weight: 700; color: var(--text3);
+    text-align: center; line-height: 16px; height: 16px; margin-top: 2px;
+    border-radius: 5px; background: var(--bg-subtle);
+    font-variant-numeric: tabular-nums;
+  }
+  .nitem[data-score="5"] .nidx { color: var(--amber); background: color-mix(in srgb, var(--amber) 14%, transparent); }
+  .ntitle {
+    font-size: 13.5px; font-weight: 600; line-height: 1.52; letter-spacing: -0.005em;
+    text-wrap: pretty;
+  }
   .nitem[open] .ntitle { color: var(--accent); }
-  .nside { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; padding-top: 3px; }
-  .nstars { font-size: 8.5px; letter-spacing: -0.5px; color: var(--amber); }
-  .nsent { font-size: 10px; font-weight: 800; }
+  .nside { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; padding-top: 3px; }
+  .nstars { font-size: 8px; letter-spacing: -0.4px; color: var(--amber); opacity: 0.9; }
+  .nsent { font-size: 9.5px; font-weight: 800; line-height: 1; }
   .bull { color: var(--up-red); }
   .bear { color: var(--up-green); }
   .neu { color: var(--text3); }
-  .nbody { padding: 0 2px 12px 26px; }
-  .ntag { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 6px; }
+  .nbody { padding: 0 2px 13px 29px; animation: fadeUp 0.24s ease both; }
+  .ntag { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 7px; }
   .ntag span {
-    font-size: 10px; padding: 1px 7px; border-radius: 5px;
-    background: var(--bg-subtle); color: var(--text2);
+    font-size: 9.5px; font-weight: 600; padding: 1.5px 7px; border-radius: 5px;
+    background: var(--bg-subtle); color: var(--text2); letter-spacing: 0.01em;
   }
-  .nfact { font-size: 13px; line-height: 1.72; color: var(--text2); margin-bottom: 7px; }
+  .nfact { font-size: 12.5px; line-height: 1.76; color: var(--text2); margin-bottom: 8px; }
   .nimpact {
-    font-size: 12.5px; line-height: 1.65; color: var(--text);
+    font-size: 12px; line-height: 1.68; color: var(--text);
     background: var(--bg-subtle); border-left: 2px solid var(--accent);
-    padding: 6px 9px; border-radius: 0 7px 7px 0; margin-bottom: 8px;
+    padding: 7px 10px; border-radius: 0 8px 8px 0; margin-bottom: 9px;
   }
-  .nimpact b { color: var(--accent); font-size: 10px; font-weight: 800; margin-right: 5px; }
+  .nimpact b {
+    color: var(--accent); font-size: 9.5px; font-weight: 800;
+    margin-right: 6px; letter-spacing: 0.04em;
+  }
   .nfoot { display: flex; justify-content: flex-end; font-size: 11px; }
   .nfoot a { color: var(--accent); font-weight: 700; text-decoration: none; }
   .nfoot .nolink { color: var(--text3); }
-  .empty { padding: 22px 8px; text-align: center; font-size: 12.5px; color: var(--text3); }
+  .empty { padding: 24px 8px; text-align: center; font-size: 12px; color: var(--text3); }
 
   footer {
-    margin-top: 18px; padding: 14px 0 6px;
+    margin-top: 20px; padding: 14px 0 8px;
     border-top: 1px solid var(--border);
-    text-align: center; font-size: 10.5px; line-height: 1.85; color: var(--text3);
+    text-align: center; font-size: 10px; line-height: 1.9; color: var(--text3);
   }
+  footer b { color: var(--text2); font-weight: 600; }
 
   @media (min-width: 700px) {
-    .hero h1 { font-size: 24px; }
-    .mkt { grid-template-columns: 1fr 1fr; gap: 10px; }
-    .ntitle { font-size: 15px; }
+    .hero h1 { font-size: 25px; }
+    .mkt { gap: 10px; }
+    .mrow { padding: 5px 0; }
+    .mname { font-size: 12.5px; }
+    .mpct { font-size: 11.5px; }
+    .ntitle { font-size: 14.5px; }
+    .nfact { font-size: 13px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
   }
 </style>
 </head>
@@ -1237,6 +1675,7 @@ HTML_TEMPLATE = """
 
 <main class="wrap">
   <section class="hero">
+    <div class="kicker">__KICKER__</div>
     <h1>__MOOD_HEADLINE__</h1>
     <div class="hmeta">
       <span class="mood __MOOD_CLASS__">__MOOD_LABEL__</span>
@@ -1256,8 +1695,10 @@ HTML_TEMPLATE = """
   __PANELS__
 
   <footer>
-    <div>Bloomberg · FT · Reuters · WSJ · CNBC · 财联社 · BBC</div>
-    <div>行情 __DATA_NOTE__ · 早 08:30 / 收 15:30 / 晚 22:00</div>
+    <div>官方一手 · <b>美联储 / SEC / 欧洲央行</b></div>
+    <div><b>彭博 · FT · 路透 · WSJ · MarketWatch · CNBC · Investing · 日经亚洲 · 南华早报</b></div>
+    <div>国内快讯 · <b>财联社 · 新浪财经 · 东方财富 · 同花顺</b></div>
+    <div style="margin-top:5px">行情 __DATA_NOTE__ · 早 08:30 / 收 15:30 / 晚 22:00</div>
   </footer>
 </main>
 
@@ -1335,31 +1776,35 @@ def render_page_html(now, edition, us_idx, tech_stocks, a_idx, macro_assets, llm
 
     if edition == "close":
         groups = [
-            (meta["a_card_title"], a_idx, False),
-            ("🌍 大宗 · 加密 · 汇率", macro_assets, True),
-            (meta["us_card_title"], us_idx, True),
-            ("🚀 美股科技", tech_stocks, True),
+            ("🇨🇳 A股/港股", a_idx, False, 4),
+            ("🌍 大宗外汇", macro_assets, True, 4),
+            ("🇺🇸 美股指数", us_idx, True, 4),
+            ("🚀 科技龙头", tech_stocks, True, 4),
         ]
         overview_title = "A 股收盘全景复盘"
+        kicker = "CLOSING BELL · 收盘复盘"
     elif edition == "pm":
         groups = [
-            (meta["us_card_title"], us_idx, True),
-            ("🚀 美股科技", tech_stocks, True),
-            ("🌍 大宗 · 加密 · 汇率", macro_assets, True),
-            (meta["a_card_title"], a_idx, False),
+            ("🇺🇸 美股指数", us_idx, True, 4),
+            ("🚀 科技龙头", tech_stocks, True, 4),
+            ("🌍 大宗外汇", macro_assets, True, 4),
+            ("🇨🇳 A股/港股", a_idx, False, 4),
         ]
         overview_title = "晚间美股前瞻与跨市场总览"
+        kicker = "EVENING BRIEF · 晚报前瞻"
     else:
         groups = [
-            (meta["us_card_title"], us_idx, True),
-            ("🚀 美股科技", tech_stocks, True),
-            (meta["a_card_title"], a_idx, False),
-            ("🌍 大宗 · 加密 · 汇率", macro_assets, True),
+            ("🇺🇸 美股指数", us_idx, True, 4),
+            ("🚀 科技龙头", tech_stocks, True, 4),
+            ("🇨🇳 A股/港股", a_idx, False, 4),
+            ("🌍 大宗外汇", macro_assets, True, 4),
         ]
         overview_title = "今日早报主编全景总览"
+        kicker = "MORNING BRIEF · 早报总览"
 
     market_tiles = "".join(
-        render_market_group_html(title, data, is_us=is_us) for title, data, is_us in groups
+        render_market_group_html(title, data, is_us=is_us, preview=preview)
+        for title, data, is_us, preview in groups
     )
     tabs_html, panels_html = render_news_sections_html(us_news, cn_news, gen_news, edition)
 
@@ -1391,6 +1836,7 @@ def render_page_html(now, edition, us_idx, tech_stocks, a_idx, macro_assets, llm
         "__TABS__": tabs_html,
         "__PANELS__": panels_html,
         "__DATA_NOTE__": esc(data_note),
+        "__KICKER__": esc(kicker),
     }
     page = HTML_TEMPLATE
     for k, v in replacements.items():
@@ -1429,11 +1875,12 @@ def save_web_pages(now, edition, us_idx, tech_stocks, a_idx, macro_assets, llm_d
 
 
 # ================= 飞书精简入口卡片 =================
-def format_market_md(data, is_us=False):
+def format_market_md(data, is_us=False, limit=4):
+    """飞书卡片内的行情小表：标的变多后只展示前 limit 项，完整版看网页"""
     if not data:
         return "<font color='grey'>暂无数据</font>"
     lines = []
-    for item in data:
+    for item in data[:limit]:
         pct = item["pct"]
         sign = "+" if pct > 0 else ""
         if is_us:
@@ -1441,6 +1888,8 @@ def format_market_md(data, is_us=False):
         else:
             color = "red" if pct > 0 else ("green" if pct < 0 else "grey")
         lines.append(f"**{item['name']}** `{item['price']}` <font color='{color}'>{sign}{pct:.2f}%</font>")
+    if len(data) > limit:
+        lines.append(f"<font color='grey'>其余 {len(data) - limit} 项见网页 ↗</font>")
     return "\n".join(lines)
 
 
@@ -1537,7 +1986,7 @@ def build_feishu_summary_card(now, edition, edition_id, us_idx, tech_stocks, a_i
         "elements": [
             {
                 "tag": "plain_text",
-                "content": f"早报/收盘报/晚报三推终端 · 信源：Bloomberg / FT / Reuters / WSJ / CNBC / 财联社 / BBC | {now.strftime('%H:%M')}",
+                "content": f"官方一手：美联储/SEC/欧洲央行 · 财经：彭博/FT/路透/WSJ/CNBC · 国内：财联社/新浪/东财/同花顺 | {now.strftime('%H:%M')}",
             }
         ],
     })
@@ -1562,18 +2011,23 @@ def run_generate(edition_arg="auto"):
     print(f"=== 开始生成【{meta['full_name']}】({edition}) ===")
 
     print("1/3 正在抓取跨市场精准行情与 7 日走势...")
-    us_idx = fetch_yf_group({"纳斯达克": "^IXIC", "标普500": "^GSPC", "道琼斯": "^DJI", "费城半导体": "^SOX"})
-    tech_stocks = fetch_yf_group({"英伟达": "NVDA", "苹果": "AAPL", "微软": "MSFT", "特斯拉": "TSLA"})
-    macro_assets = fetch_yf_group({"黄金": "GC=F", "WTI原油": "CL=F", "BTC": "BTC-USD", "离岸RMB": "CNH=X"})
+    us_idx = fetch_yf_group(US_INDEX_TARGETS)
+    tech_stocks = fetch_yf_group(US_STOCK_TARGETS)
+    macro_assets = fetch_yf_group(MACRO_TARGETS)
     a_idx = get_a_market()
+    print(
+        f"[行情] 指数 {len(a_idx)}/{len(A_INDEX_TARGETS)} · 美股 {len(us_idx)}/{len(US_INDEX_TARGETS)}"
+        f" · 个股 {len(tech_stocks)}/{len(US_STOCK_TARGETS)} · 大宗 {len(macro_assets)}/{len(MACRO_TARGETS)}"
+    )
 
     print(f"2/3 正在抓取过去 {meta['rss_hours']} 小时机构级信源...")
-    global_fin_raw = fetch_rss_within_hours(GLOBAL_FINANCE_RSS, hours=meta["rss_hours"], max_per_feed=7)
-    general_raw = fetch_rss_within_hours(GENERAL_NEWS_RSS, hours=meta["rss_hours"], max_per_feed=5)
-    cn_fin_raw = fetch_cls_telegraph(limit=meta["cls_limit"])
+    official_raw = fetch_rss_within_hours(OFFICIAL_RSS, hours=max(48, meta["rss_hours"]), max_per_feed=3)
+    global_fin_raw = fetch_rss_within_hours(GLOBAL_FINANCE_RSS, hours=meta["rss_hours"], max_per_feed=5)
+    general_raw = fetch_rss_within_hours(GENERAL_NEWS_RSS, hours=meta["rss_hours"], max_per_feed=4)
+    cn_fin_raw = fetch_cn_flash(limit=90)
 
     print("3/3 正在调用大模型评级排序并渲染网页...")
-    llm_data = analyze_with_llm(global_fin_raw, cn_fin_raw, general_raw, edition)
+    llm_data = analyze_with_llm(global_fin_raw, cn_fin_raw, general_raw, edition, official_raw)
     edition_id = save_web_pages(now, edition, us_idx, tech_stocks, a_idx, macro_assets, llm_data)
 
     site_url = get_site_url()
