@@ -317,11 +317,13 @@ A_INDEX_TARGETS = [
 ]
 
 
-def _a_session_label():
-    """区分 A 股是盘中实时还是收盘快照，避免早报把昨收标成「实时」"""
+def _a_as_of(last_day=""):
+    """A 股行情时点：盘中标实时，休市用日线的真实交易日标注，避免标题重复出现「收盘」"""
     now = datetime.datetime.now(BJ_TZ)
     trading = now.weekday() < 5 and (9, 25) <= (now.hour, now.minute) <= (15, 5)
-    return "实时" if trading else "收盘"
+    if trading:
+        return now.strftime("%m-%d %H:%M 实时")
+    return f"{last_day} 收盘" if last_day else "收盘"
 
 
 # 指数快照候选源：东财数据最好但经常对云端 IP 限流，新浪作为第二主力
@@ -367,11 +369,16 @@ def _index_history(em_symbol):
             col = "close" if "close" in df.columns else df.columns[-1]
             vals = [_safe_float(v) for v in df[col].tolist()]
             vals = [v for v in vals if v]
+            last_day = ""
+            if "date" in df.columns and len(df):
+                last_day = str(df["date"].iloc[-1])[:10]
+            elif len(df.index):
+                last_day = str(df.index[-1])[:10]
             if len(vals) >= 2:
-                return vals[-8:]
+                return vals[-8:], last_day
         except Exception as e:
             print(f"[行情] {fname}({em_symbol}) 失败: {type(e).__name__}")
-    return []
+    return [], ""
 
 
 def _match_index_row(df, name, code6):
@@ -408,10 +415,10 @@ def _quote_from_index_row(name, yf_symbol, row, em_symbol):
         if not prev and price and chg is not None:
             prev = price - chg
 
-    hist = _index_history(em_symbol)
+    hist, last_day = _index_history(em_symbol)
     if hist and price:
         hist = hist[:-1] + [price]
-    return _build_quote(name, yf_symbol, price, prev, hist, _a_session_label(), "A股多源")
+    return _build_quote(name, yf_symbol, price, prev, hist, _a_as_of(last_day), "东财·新浪")
 
 
 def get_a_market():
@@ -894,8 +901,6 @@ def build_archive_select_html(entry_ids, current_id, is_archive=False):
     for eid in entry_ids:
         selected = " selected" if eid == current_id else ""
         label = format_archive_label(eid)
-        if eid == entry_ids[0]:
-            label += " (最新)"
         target = f"{prefix}{eid}.html"
         options.append(f'<option value="{esc(target)}"{selected}>{esc(label)}</option>')
     return (
