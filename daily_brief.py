@@ -589,12 +589,22 @@ def get_a_market():
 
     if len(quotes) < len(A_INDEX_TARGETS):
         for name, _em_sym, yf_sym, _aliases in A_INDEX_TARGETS:
-            if name in quotes or not yf_sym:
+            if name in quotes:
+                continue
+            if not yf_sym:
+                # 北证50 这类没有 Yahoo 备用代码的标的，快照源没给就只能缺着——但要说出名字
+                print(f"[行情] {name} 无 Yahoo 备用代码，本时段缺失")
                 continue
             quote = _yf_quote(name, yf_sym)
             if quote:
                 quote["source"] = "Yahoo 备用"
                 quotes[name] = quote
+            else:
+                print(f"[行情] {name} 快照源与 Yahoo 备用源均未取到有效数值，本时段缺失")
+
+    missing = [n for n, _e, _y, _a in A_INDEX_TARGETS if n not in quotes]
+    if missing:
+        print(f"[行情] A股/港股缺 {len(missing)}/{len(A_INDEX_TARGETS)} 个：{'、'.join(missing)}")
 
     return [quotes[n] for n, _e, _y, _a in A_INDEX_TARGETS if n in quotes]
 
