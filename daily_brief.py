@@ -165,96 +165,226 @@ def archive_sort_key(entry_id):
 
 
 def format_archive_label(entry_id):
+    """压缩成 11-27 ☀️早报，保证手机端下拉框不被截断"""
+    short = entry_id[5:10] if len(entry_id) >= 10 else entry_id
     if entry_id.endswith("-am"):
-        return f"{entry_id[:-3]} ☀️早报"
+        return f"{short} ☀️早报"
     if entry_id.endswith("-close"):
-        return f"{entry_id[:-6]} 🌇收盘"
+        return f"{short} 🌇收盘"
     if entry_id.endswith("-pm"):
-        return f"{entry_id[:-3]} 🌙晚报"
-    return entry_id
+        return f"{short} 🌙晚报"
+    return short
+
+
+def _safe_float(value):
+    """把任意输入转成有限浮点数，失败返回 None（所有行情数值统一在这里清洗）"""
+    try:
+        num = float(value)
+    except (TypeError, ValueError):
+        return None
+    return num if math.isfinite(num) else None
+
+
+def _pct_limit(symbol):
+    """按标的类型给出单日涨跌幅合理上限，用于拦截脏数据"""
+    if symbol.startswith("^"):
+        return 12.0
+    if symbol.endswith("-USD"):
+        return 40.0
+    if symbol.endswith("=F") or symbol.endswith("=X"):
+        return 15.0
+    return 25.0
+
+
+def _build_quote(name, symbol, price, prev, history, as_of="", source="Yahoo"):
+    """统一封装行情并做合理性护栏：价格非正、涨跌幅离谱的数据一律不入库"""
+    price, prev = _safe_float(price), _safe_float(prev)
+    if not price or not prev or price <= 0 or prev <= 0:
+        return None
+    pct = (price - prev) / prev * 100
+    if not math.isfinite(pct):
+        return None
+    if abs(pct) > _pct_limit(symbol):
+        print(f"[行情] {name}({symbol}) 涨跌幅 {pct:+.2f}% 超出合理区间，判定为脏数据并丢弃")
+        return None
+    hist = [v for v in (_safe_float(x) for x in (history or [])) if v]
+    return {
+        "name": name,
+        "symbol": symbol,
+        "price": f"{price:,.2f}",
+        "pct": pct,
+        "history": hist[-7:],
+        "as_of": as_of,
+        "source": source,
+    }
+
+
+def _yf_quote(name, symbol):
+    """Yahoo 行情：日线收盘算 7 日走势，实时价与日线交叉校验后才决定口径。
+
+    旧实现直接拿 closes[-1]/closes[-2] 相除，一是无法发现「数据停在几天前」的陈旧行情，
+    二是 fast_info 兜底时 lastPrice 与 previousClose 可能来自不同交易日，导致涨跌幅算错。
+    这里改成：日线与实时价各算一次涨跌幅，两者一致才用实时价，否则回退日线并打日志。
+    """
+    closes, last_date = [], None
+    live, live_prev = None, None
+    try:
+        ticker = yf.Ticker(symbol)
+    except Exception as e:
+        print(f"[行情] {name}({symbol}) 初始化失败: {e}")
+        return None
+
+    try:
+        hist = ticker.history(period="1mo", interval="1d", auto_adjust=False)
+        if hist is not None and not hist.empty and "Close" in hist.columns:
+            for ts, val in hist["Close"].items():
+                num = _safe_float(val)
+                if num and num > 0:
+                    closes.append(num)
+                    last_date = getattr(ts, "date", lambda: None)()
+    except Exception as e:
+        print(f"[行情] {name}({symbol}) 日线获取失败: {e}")
+
+    try:
+        fast = ticker.fast_info
+        live = _safe_float(fast.get("lastPrice") or fast.get("last_price"))
+        live_prev = _safe_float(fast.get("previousClose") or fast.get("previous_close"))
+    except Exception:
+        live, live_prev = None, None
+
+    price, prev, hist_vals = None, None, closes[:]
+    as_of = f"{last_date} 收盘" if last_date else ""
+
+    if len(closes) >= 2:
+        price, prev = closes[-1], closes[-2]
+        series_pct = (price - prev) / prev * 100
+        if live and live_prev:
+            live_pct = (live - live_prev) / live_prev * 100
+            if abs(live_pct - series_pct) <= 0.35:
+                price, prev = live, live_prev
+                hist_vals = closes + [live]
+                as_of = datetime.datetime.now(BJ_TZ).strftime("%m-%d %H:%M 实时")
+            else:
+                print(
+                    f"[行情] {name}({symbol}) 实时价与日线偏离过大"
+                    f"({live_pct:+.2f}% vs {series_pct:+.2f}%)，采用日线收盘口径"
+                )
+    elif live and live_prev:
+        price, prev = live, live_prev
+        hist_vals = [live_prev, live]
+        as_of = datetime.datetime.now(BJ_TZ).strftime("%m-%d %H:%M 实时")
+
+    if price is None:
+        return None
+    stale_days = 0
+    if last_date:
+        stale_days = (datetime.datetime.now(BJ_TZ).date() - last_date).days
+    if stale_days > 5:
+        print(f"[行情] {name}({symbol}) 数据最后更新于 {last_date}，已陈旧 {stale_days} 天")
+    return _build_quote(name, symbol, price, prev, hist_vals, as_of)
 
 
 def fetch_yf_group(tickers_dict):
-    """批量获取 Yahoo Finance 行情及 7 日走势序列（过滤 NaN + fast_info 兜底）"""
+    """批量获取 Yahoo 行情，单只失败不影响其余标的"""
     results = []
     for name, symbol in tickers_dict.items():
-        close, prev = None, None
-        closes = []
-        try:
-            ticker = yf.Ticker(symbol)
-            hist = ticker.history(period="12d")
-            if hist is not None and not hist.empty and "Close" in hist.columns:
-                closes = [
-                    float(x)
-                    for x in hist["Close"].dropna().tolist()
-                    if math.isfinite(float(x))
-                ]
-                if len(closes) >= 2:
-                    close, prev = closes[-1], closes[-2]
-
-            if close is None or prev is None or prev == 0:
-                info = ticker.fast_info
-                lp = info.get("lastPrice") or info.get("last_price")
-                pc = info.get("previousClose") or info.get("previous_close")
-                if lp is not None and pc is not None:
-                    lp, pc = float(lp), float(pc)
-                    if math.isfinite(lp) and math.isfinite(pc) and pc != 0:
-                        close, prev = lp, pc
-                        if not closes:
-                            closes = [pc, lp]
-
-            if close is not None and prev is not None and prev != 0:
-                pct = (close - prev) / prev * 100
-                if math.isfinite(pct):
-                    results.append({
-                        "name": name,
-                        "symbol": symbol,
-                        "price": f"{close:,.2f}",
-                        "pct": pct,
-                        "history": closes[-7:],
-                    })
-                    continue
+        quote = _yf_quote(name, symbol)
+        if quote:
+            results.append(quote)
+        else:
             print(f"[行情] {name}({symbol}) 未获取到有效数值")
-        except Exception as e:
-            print(f"[行情] {name}({symbol}) 获取失败: {e}")
     return results
+
+
+A_INDEX_TARGETS = [
+    ("上证指数", "sh000001", "000001.SS"),
+    ("深证成指", "sz399001", "399001.SZ"),
+    ("创业板指", "sz399006", "399006.SZ"),
+    ("沪深300", "sh000300", "000300.SS"),
+]
+
+
+def _a_session_label():
+    """区分 A 股是盘中实时还是收盘快照，避免早报把昨收标成「实时」"""
+    now = datetime.datetime.now(BJ_TZ)
+    trading = now.weekday() < 5 and (9, 25) <= (now.hour, now.minute) <= (15, 5)
+    return "东财实时" if trading else "东财收盘"
+
+
+def _em_index_history(symbol):
+    """东方财富指数日线：与实时价同源，避免用 Yahoo 走势拼东财价格造成曲线失真"""
+    try:
+        df = ak.stock_zh_index_daily_em(symbol=symbol)
+        if df is None or df.empty:
+            return []
+        col = "close" if "close" in df.columns else df.columns[-1]
+        vals = [_safe_float(v) for v in df[col].tolist()]
+        return [v for v in vals if v][-8:]
+    except Exception as e:
+        print(f"[行情] 东财日线 {symbol} 获取失败: {e}")
+        return []
 
 
 def get_a_market():
-    """获取 A 股核心指数（东方财富主源 + Yahoo 7日走势补全/兜底）"""
-    targets = [
-        ("上证指数", "000001.SS"),
-        ("深证成指", "399001.SZ"),
-        ("创业板指", "399006.SZ"),
-        ("沪深300", "000300.SS"),
-    ]
-    yf_backup = {item["name"]: item for item in fetch_yf_group({n: s for n, s in targets})}
+    """A 股核心指数：东方财富为主源，逐只校验并由昨收重算涨跌幅。
 
-    results = []
+    修掉旧实现的三个问题：
+    1. 只信「涨跌幅」字段 → 改为用「最新价 / 昨收」重算并交叉校验；
+    2. 只要有一只缺失就丢弃全部东财结果、整体换成 Yahoo → 改为逐只补齐；
+    3. 用 Yahoo 走势拼接东财价格 → 改为走势与价格同源（东财日线）。
+    """
+    quotes = {}
+
     try:
         df = ak.stock_zh_index_spot_em()
-        for name, sym in targets:
-            row = df[df["名称"] == name]
-            if not row.empty:
-                price = float(row["最新价"].values[0])
-                pct = float(row["涨跌幅"].values[0])
-                if math.isfinite(price) and math.isfinite(pct):
-                    hist_pts = yf_backup.get(name, {}).get("history", [])
-                    if hist_pts:
-                        hist_pts = list(hist_pts[:-1]) + [price]
-                    results.append({
-                        "name": name,
-                        "symbol": sym,
-                        "price": f"{price:,.2f}",
-                        "pct": pct,
-                        "history": hist_pts,
-                    })
+        name_col = "名称" if "名称" in df.columns else df.columns[2]
+        for name, em_sym, yf_sym in A_INDEX_TARGETS:
+            rows = df[df[name_col].astype(str).str.strip() == name]
+            if rows.empty:
+                print(f"[行情] 东方财富未返回 {name}，稍后用备用源补齐")
+                continue
+            row = rows.iloc[0]
+            price = _safe_float(row.get("最新价"))
+            pct_raw = _safe_float(row.get("涨跌幅"))
+            prev = _safe_float(row.get("昨收"))
+            if not prev:
+                chg = _safe_float(row.get("涨跌额"))
+                if price and chg is not None:
+                    prev = price - chg
+                elif price and pct_raw is not None and pct_raw > -100:
+                    prev = price / (1 + pct_raw / 100)
+
+            if price and prev:
+                pct_calc = (price - prev) / prev * 100
+                if pct_raw is not None and abs(pct_calc - pct_raw) > 0.05:
+                    print(
+                        f"[行情] {name} 东财涨跌幅({pct_raw:+.2f}%)与昨收推算"
+                        f"({pct_calc:+.2f}%)不一致，采用昨收推算值"
+                    )
+
+            hist = _em_index_history(em_sym)
+            if hist and price:
+                hist = hist[:-1] + [price]
+
+            quote = _build_quote(name, yf_sym, price, prev, hist, _a_session_label(), "东方财富")
+            if quote:
+                quotes[name] = quote
+            else:
+                print(f"[行情] {name} 东财数值不合理，稍后用备用源补齐")
     except Exception as e:
         print(f"[行情] 东方财富接口异常，切换 Yahoo 备用源: {e}")
 
-    if len(results) < 4:
-        results = [yf_backup[n] for n, _ in targets if n in yf_backup]
-    return results
+    if len(quotes) < len(A_INDEX_TARGETS):
+        for name, _em_sym, yf_sym in A_INDEX_TARGETS:
+            if name in quotes:
+                continue
+            quote = _yf_quote(name, yf_sym)
+            if quote:
+                quote["source"] = "Yahoo 备用"
+                quotes[name] = quote
+
+    return [quotes[n] for n, _e, _y in A_INDEX_TARGETS if n in quotes]
+
 
 
 def fetch_rss_within_hours(rss_dict, hours=12, max_per_feed=7):
@@ -486,176 +616,130 @@ def render_sparkline_svg(values, stroke_color, grad_id):
     )
 
 
-def render_ticker_tape_html(all_groups):
-    chips = []
-    for items, is_us in all_groups:
-        for item in items:
-            pct = item["pct"]
-            sign = "+" if pct > 0 else ""
-            if pct == 0:
-                cls = "tape-flat"
-            elif is_us:
-                cls = "tape-green" if pct > 0 else "tape-red"
-            else:
-                cls = "tape-red" if pct > 0 else "tape-green"
-            chips.append(
-                f'<span class="tape-item">'
-                f'  <span class="tape-name">{esc(item["name"])}</span>'
-                f'  <span class="tape-price">{esc(item["price"])}</span>'
-                f'  <span class="tape-pct {cls}">{sign}{pct:.2f}%</span>'
-                f'</span>'
-            )
-    if not chips:
+def _as_of_label(items):
+    """把行情时间戳压成极短标签，方便在卡片角上标注数据时点"""
+    if not items:
         return ""
-    track = "".join(chips)
-    return f'<div class="ticker-tape"><div class="ticker-track">{track}{track}</div></div>'
+    raw = items[0].get("as_of") or ""
+    if not raw:
+        return ""
+    if "实时" in raw:
+        return "实时"
+    if "收盘" in raw:
+        # Yahoo 口径形如「2026-11-26 收盘」，东财口径只有「东财收盘」
+        if len(raw) >= 10 and raw[4] == "-":
+            return f"{raw[5:10]} 收"
+        return "收盘"
+    return raw[:6]
 
 
-def render_market_card_html(title, subtitle, data, is_us=True, card_prefix="m"):
-    rows_html = []
-    if not data:
-        rows_html.append('<div class="market-row"><span class="ticker-name" style="color:var(--text-muted)">暂无有效数据</span></div>')
-    else:
-        for idx, item in enumerate(data):
-            pct = item["pct"]
-            sign = "+" if pct > 0 else ""
-            if pct == 0:
-                cls = "pct-flat"
-                stroke = "#94a3b8"
-            elif is_us:
-                cls = "pct-green" if pct > 0 else "pct-red"
-                stroke = "#10b981" if pct > 0 else "#f43f5e"
-            else:
-                cls = "pct-red" if pct > 0 else "pct-green"
-                stroke = "#f43f5e" if pct > 0 else "#10b981"
-
-            spark_svg = render_sparkline_svg(item.get("history", []), stroke, f"sg-{card_prefix}-{idx}")
-            rows_html.append(
-                f'<div class="market-row">'
-                f'  <div class="ticker-left">'
-                f'    <span class="ticker-name">{esc(item["name"])}</span>'
-                f'    <span class="ticker-sym">{esc(item.get("symbol", ""))}</span>'
-                f'  </div>'
-                f'  <div class="ticker-mid">{spark_svg}</div>'
-                f'  <div class="ticker-right">'
-                f'    <span class="ticker-price">{esc(item["price"])}</span>'
-                f'    <span class="pct-badge {cls}">{sign}{pct:.2f}%</span>'
-                f'  </div>'
-                f'</div>'
-            )
+def render_market_group_html(title, data, is_us=True):
+    """紧凑行情组卡：每行「名称 + 价格 / 涨跌幅」，7 日走势线作为右侧淡背景"""
+    pos_cls, neg_cls = ("pos-green", "neg-red") if is_us else ("pos-red", "neg-green")
+    stroke_map = {
+        "pos-green": "#10b981",
+        "neg-red": "#f43f5e",
+        "pos-red": "#f43f5e",
+        "neg-green": "#10b981",
+        "flat": "#94a3b8",
+    }
+    rows = []
+    for item in data:
+        pct = item["pct"]
+        cls = "flat" if abs(pct) < 0.005 else (pos_cls if pct > 0 else neg_cls)
+        grad_id = "sp-" + re.sub(r"[^A-Za-z0-9]", "", item.get("symbol", "x"))
+        spark = render_sparkline_svg(item.get("history", []), stroke_map[cls], grad_id)
+        rows.append(
+            f'<div class="mrow">'
+            f'{spark}'
+            f'<span class="mname">{esc(item["name"])}<em>{esc(item["price"])}</em></span>'
+            f'<span class="mpct {cls}">{pct:+.2f}%</span>'
+            f'</div>'
+        )
+    if not rows:
+        rows.append('<div class="mrow"><span class="mname" style="color:var(--text-muted)">暂无数据</span></div>')
+    note = _as_of_label(data)
+    note_html = f'<span class="gtime">{esc(note)}</span>' if note else ""
     return (
-        f'<div class="market-card">'
-        f'  <div class="market-card-title"><span>{esc(title)}</span><span class="market-card-sub">{esc(subtitle)}</span></div>'
-        f'  {"".join(rows_html)}'
+        f'<div class="gcard">'
+        f'  <div class="gcap"><span>{esc(title)}</span>{note_html}</div>'
+        f'  {"".join(rows)}'
         f'</div>'
     )
 
 
-def render_top_picks_html(llm_data, edition):
-    sec_map = (
-        [("cn_a_news", "cn", "A股/宏观"), ("us_global_news", "us", "美股/全球"), ("general_news", "gen", "国际/科技")]
+def render_must_read_html(llm_data, edition):
+    """首屏「必读」横向 chip：替代原先占据大半屏的 spotlight 列表"""
+    order = (
+        ["cn_a_news", "us_global_news", "general_news"]
         if edition == "close"
-        else [("us_global_news", "us", "美股/全球"), ("cn_a_news", "cn", "A股/宏观"), ("general_news", "gen", "国际/科技")]
+        else ["us_global_news", "cn_a_news", "general_news"]
     )
-    candidates = []
-    for key, prefix, label in sec_map:
-        for i, item in enumerate(llm_data.get(key, []), 1):
-            candidates.append((item["score"], f"{prefix}-{i}", label, item.get("title", "")))
-
-    candidates.sort(key=lambda x: -x[0])
-    top_items = [c for c in candidates if c[0] >= 5][:4]
-    if not top_items:
-        top_items = candidates[:3]
-    if not top_items:
+    prefix_map = {"us_global_news": "us", "cn_a_news": "cn", "general_news": "gen"}
+    cands = []
+    for key in order:
+        for i, item in enumerate(llm_data.get(key) or [], 1):
+            cands.append((safe_score(item.get("score", 3)), f"{prefix_map[key]}-{i}", item.get("title", "")))
+    cands.sort(key=lambda x: -x[0])
+    picks = [c for c in cands[:3] if c[2]]
+    if not picks:
         return ""
-
-    links = []
-    for score, anchor, label, title in top_items:
-        badge = "🔥 5★" if score >= 5 else f"★{score}"
-        links.append(
-            f'<a class="spotlight-item" href="#{anchor}">'
-            f'  <span class="spotlight-badge">{badge}</span>'
-            f'  <span class="spotlight-sec">{esc(label)}</span>'
-            f'  <span class="spotlight-title">{esc(title)}</span>'
-            f'  <span class="spotlight-arrow">↓</span>'
-            f'</a>'
+    chips = []
+    for score, anchor, title in picks:
+        badge = "🔥" if score >= 5 else f"★{score}"
+        chips.append(
+            f'<a class="chip" href="#{anchor}"><b>{badge}</b><span>{esc(title)}</span><i>›</i></a>'
         )
-    return (
-        '<div class="spotlight-wrap">'
-        '  <div class="spotlight-header">⚡ 本期必读重磅速达（按重要性排序）</div>'
-        f'  <div class="spotlight-list">{"".join(links)}</div>'
-        '</div>'
-    )
+    return f'<div class="chips">{"".join(chips)}</div>'
 
 
 def render_news_cards_html(items, section_prefix, with_impact=True):
+    """每条新闻渲染成原生 <details>：默认只占一行，点开才展开正文"""
     if not items:
-        return '<div class="news-card"><div class="news-fact">本时段暂无重要更新</div></div>'
+        return '<div class="empty">本时段暂无重要更新</div>'
     cards = []
     for i, item in enumerate(items, 1):
         score = safe_score(item.get("score", 3))
-        tag = esc(item.get("tag", "要闻"))
-        title = esc(item.get("title", ""))
-        source = esc(item.get("source", ""))
-        link = str(item.get("link", "")).strip()
         anchor_id = f"{section_prefix}-{i}"
+        title = esc(item.get("title", ""))
 
-        is_breaking = score >= 5
-        card_cls = "news-card is-breaking" if is_breaking else "news-card"
-        stars_filled = "★" * score
-        stars_empty = "☆" * (5 - score)
-        score_badge = (
-            f'<span class="breaking-pill">🔥 重磅头条 · {stars_filled}</span>'
-            if is_breaking
-            else f'<span class="score-pill" title="重磅指数 {score}/5"><span class="stars-on">{stars_filled}</span><span class="stars-off">{stars_empty}</span></span>'
-        )
-
-        sent_val = "neutral"
-        sent_html = ""
         if with_impact:
-            s = item.get("sentiment", "中性")
-            if s == "利好":
-                sent_val = "bull"
-                sent_html = '<span class="sent-pill sent-bull">▲ 利好</span>'
-            elif s == "利空":
-                sent_val = "bear"
-                sent_html = '<span class="sent-pill sent-bear">▼ 利空</span>'
-            else:
-                sent_val = "neutral"
-                sent_html = '<span class="sent-pill sent-neu">● 中性</span>'
+            sent = item.get("sentiment", "中性")
+            sent_cls, sent_mark = {"利好": ("bull", "▲"), "利空": ("bear", "▼")}.get(sent, ("neu", "●"))
+            body = esc(item.get("fact", ""))
+            impact = item.get("impact", "")
+        else:
+            sent_cls, sent_mark = "neu", ""
+            body = esc(item.get("summary", ""))
+            impact = ""
 
-        body_text = esc(item.get("fact", "") if with_impact else item.get("summary", ""))
-        impact_html = ""
-        if with_impact and item.get("impact"):
-            impact_html = (
-                f'<div class="news-impact">'
-                f'  <span class="impact-label">深度逻辑</span>'
-                f'  <span>{esc(item.get("impact"))}</span>'
-                f'</div>'
-            )
-
-        link_html = (
-            f'<a class="source-link" href="{esc(link)}" target="_blank" rel="noopener noreferrer">阅读原文 ↗</a>'
-            if link.startswith(("http://", "https://"))
-            else '<span class="source-nolink">快讯电报</span>'
+        impact_html = (
+            f'<div class="nimpact"><b>逻辑</b>{esc(impact)}</div>' if impact else ""
         )
+        link = str(item.get("link", "")).strip()
+        link_html = (
+            f'<a href="{esc(link)}" target="_blank" rel="noopener noreferrer">阅读原文 ↗</a>'
+            if link.startswith(("http://", "https://"))
+            else "<span class=\"nolink\">快讯</span>"
+        )
+        # 只让首条重磅默认展开，其余折叠，保证首屏不被正文占满
+        open_attr = " open" if (score >= 5 and i == 1) else ""
 
         cards.append(
-            f'<article id="{anchor_id}" class="{card_cls}" data-score="{score}" data-sentiment="{sent_val}">'
-            f'  <div class="news-top">'
-            f'    <span class="news-idx">#{i:02d}</span>'
-            f'    {score_badge}'
-            f'    <span class="tag-pill">{tag}</span>'
-            f'    {sent_html}'
-            f'  </div>'
-            f'  <h3 class="news-title">{title}</h3>'
-            f'  <p class="news-fact">{body_text}</p>'
-            f'  {impact_html}'
-            f'  <div class="news-footer">'
-            f'    <span class="source-meta">📰 {source}</span>'
-            f'    {link_html}'
-            f'  </div>'
-            f'</article>'
+            f'<details class="nitem" id="{anchor_id}" data-score="{score}" data-sentiment="{sent_cls}"{open_attr}>'
+            f'<summary>'
+            f'<span class="nidx">{i:02d}</span>'
+            f'<span class="ntitle">{title}</span>'
+            f'<span class="nside"><span class="nstars">{"★" * score}</span>'
+            f'<span class="nsent {sent_cls}">{sent_mark}</span></span>'
+            f'</summary>'
+            f'<div class="nbody">'
+            f'<div class="ntag"><span>{esc(item.get("tag", "要闻"))}</span><span>{esc(item.get("source", ""))}</span></div>'
+            f'<p class="nfact">{body}</p>'
+            f'{impact_html}'
+            f'<div class="nfoot">{link_html}</div>'
+            f'</div>'
+            f'</details>'
         )
     return "\n".join(cards)
 
@@ -673,7 +757,7 @@ def build_archive_select_html(entry_ids, current_id, is_archive=False):
         target = f"{prefix}{eid}.html"
         options.append(f'<option value="{esc(target)}"{selected}>{esc(label)}</option>')
     return (
-        '<select class="archive-select" aria-label="往期早中晚报" '
+        '<select class="arch" aria-label="往期早中晚报" '
         'onchange="if(this.value) window.location.href=this.value">'
         + "".join(options)
         + "</select>"
@@ -681,7 +765,7 @@ def build_archive_select_html(entry_ids, current_id, is_archive=False):
 
 
 def render_news_sections_html(us_news, cn_news, gen_news, edition):
-    """收盘报优先展示 A股/国内，早报与晚报优先展示美股/全球"""
+    """三个板块改成 Tab 面板：返回（tab 按钮 HTML, 面板 HTML），避免纵向堆叠三块长列表"""
     us_title = {
         "am": "隔夜美股与全球财经",
         "close": "亚欧盘面与美股日间动态",
@@ -694,693 +778,390 @@ def render_news_sections_html(us_news, cn_news, gen_news, edition):
         "pm": "国内盘后公告与宏观新增",
     }.get(edition, "A 股与国内宏观")
 
-    us_section = (
-        f'<section id="us-global" class="section" data-section="us">'
-        f'  <div class="section-header">'
-        f'    <h2 class="section-title">🇺🇸 {us_title}</h2>'
-        f'    <span class="section-count" data-count-for="us">{len(us_news)} 条精选</span>'
-        f'  </div>'
-        f'  <div class="news-list">{render_news_cards_html(us_news, "us", with_impact=True)}</div>'
-        f'  <div class="empty-hint" data-empty-for="us">当前筛选条件下暂无美股/全球财经新闻</div>'
-        f'</section>'
-    )
-    cn_section = (
-        f'<section id="cn-a" class="section" data-section="cn">'
-        f'  <div class="section-header">'
-        f'    <h2 class="section-title">🇨🇳 {cn_title}</h2>'
-        f'    <span class="section-count" data-count-for="cn">{len(cn_news)} 条精选</span>'
-        f'  </div>'
-        f'  <div class="news-list">{render_news_cards_html(cn_news, "cn", with_impact=True)}</div>'
-        f'  <div class="empty-hint" data-empty-for="cn">当前筛选条件下暂无 A 股/宏观新闻</div>'
-        f'</section>'
-    )
-    gen_section = (
-        f'<section id="general" class="section" data-section="gen">'
-        f'  <div class="section-header">'
-        f'    <h2 class="section-title">🌐 国际时政与前沿科技</h2>'
-        f'    <span class="section-count" data-count-for="gen">{len(gen_news)} 条精选</span>'
-        f'  </div>'
-        f'  <div class="news-list">{render_news_cards_html(gen_news, "gen", with_impact=False)}</div>'
-        f'  <div class="empty-hint" data-empty-for="gen">当前筛选条件下暂无国际/科技新闻</div>'
-        f'</section>'
-    )
+    blocks = [
+        ("us", "美股", f"🇺🇸 {us_title}", us_news, True),
+        ("cn", "A股", f"🇨🇳 {cn_title}", cn_news, True),
+        ("gen", "国际", "🌐 国际时政与前沿科技", gen_news, False),
+    ]
     if edition == "close":
-        return "\n".join([cn_section, us_section, gen_section])
-    return "\n".join([us_section, cn_section, gen_section])
+        blocks = [blocks[1], blocks[0], blocks[2]]
+
+    tabs, panels = [], []
+    for idx, (key, short, title, items, with_impact) in enumerate(blocks):
+        on = " on" if idx == 0 else ""
+        tabs.append(
+            f'<button class="tab{on}" type="button" data-tab="{key}" role="tab">'
+            f'{short}<em>{len(items)}</em></button>'
+        )
+        panels.append(
+            f'<section class="panel{on}" data-panel="{key}">'
+            f'<div class="phead">{esc(title)}</div>'
+            f'{render_news_cards_html(items, key, with_impact=with_impact)}'
+            f'</section>'
+        )
+    return "".join(tabs), "\n".join(panels)
 
 
-HTML_TEMPLATE = """<!DOCTYPE html>
+HTML_TEMPLATE = """
+<!DOCTYPE html>
 <html lang="zh-CN" data-theme="dark" data-edition="__EDITION_CODE__">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>DAILY BRIEF · __FULL_NAME__ · __DATE_STR__</title>
-  <style>
-    :root {
-      --bg: #070b14;
-      --bg-glow-1: rgba(56, 189, 248, 0.11);
-      --bg-glow-2: rgba(99, 102, 241, 0.09);
-      --bg-elevated: #0f172a;
-      --bg-card: rgba(17, 25, 42, 0.86);
-      --bg-card-hover: rgba(23, 34, 56, 0.96);
-      --bg-subtle: rgba(255, 255, 255, 0.035);
-      --border: rgba(148, 163, 184, 0.13);
-      --border-strong: rgba(148, 163, 184, 0.28);
-      --text: #f1f5f9;
-      --text-secondary: #94a3b8;
-      --text-muted: #64748b;
-      --accent: #38bdf8;
-      --accent-soft: rgba(56, 189, 248, 0.12);
-      --edition-bg: rgba(56, 189, 248, 0.14);
-      --edition-color: #7dd3fc;
-      --green: #10b981;
-      --green-bg: rgba(16, 185, 129, 0.14);
-      --red: #f43f5e;
-      --red-bg: rgba(244, 63, 94, 0.14);
-      --amber: #f59e0b;
-      --amber-bg: rgba(245, 158, 11, 0.14);
-      --breaking-border: rgba(245, 158, 11, 0.45);
-      --breaking-glow: 0 12px 34px -14px rgba(245, 158, 11, 0.24);
-      --shadow: 0 12px 30px -14px rgba(0, 0, 0, 0.65);
-      --font-sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI", sans-serif;
-      --font-serif: "Songti SC", "STSong", "Noto Serif CJK SC", "Source Han Serif SC", Georgia, serif;
-      --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
-    }
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="theme-color" content="#070b14" />
+<title>__FULL_NAME__ · __DATE_STR__</title>
+<style>
+  :root {
+    --bg: #070b14;
+    --bg-card: #0e1626;
+    --bg-subtle: rgba(255, 255, 255, 0.04);
+    --border: rgba(148, 163, 184, 0.14);
+    --text: #f1f5f9;
+    --text2: #94a3b8;
+    --text3: #64748b;
+    --accent: #38bdf8;
+    --accent-soft: rgba(56, 189, 248, 0.12);
+    --edition-bg: rgba(56, 189, 248, 0.15);
+    --edition-color: #7dd3fc;
+    --up-red: #f43f5e;
+    --up-green: #10b981;
+    --amber: #f59e0b;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  [data-edition="close"] {
+    --accent: #f59e0b;
+    --accent-soft: rgba(245, 158, 11, 0.13);
+    --edition-bg: rgba(245, 158, 11, 0.16);
+    --edition-color: #fcd34d;
+  }
+  [data-edition="pm"] {
+    --accent: #818cf8;
+    --accent-soft: rgba(129, 140, 248, 0.13);
+    --edition-bg: rgba(139, 92, 246, 0.16);
+    --edition-color: #c4b5fd;
+  }
+  [data-theme="light"] {
+    --bg: #f2f4f8;
+    --bg-card: #ffffff;
+    --bg-subtle: #f5f7fa;
+    --border: rgba(15, 23, 42, 0.09);
+    --text: #0f172a;
+    --text2: #475569;
+    --text3: #7b8a9e;
+    --accent: #0284c7;
+    --accent-soft: rgba(2, 132, 199, 0.1);
+    --edition-bg: rgba(2, 132, 199, 0.11);
+    --edition-color: #0369a1;
+    --up-red: #e11d48;
+    --up-green: #059669;
+    --amber: #d97706;
+  }
+  [data-theme="light"][data-edition="close"] {
+    --accent: #d97706;
+    --accent-soft: rgba(217, 119, 6, 0.11);
+    --edition-bg: rgba(217, 119, 6, 0.12);
+    --edition-color: #b45309;
+  }
+  [data-theme="light"][data-edition="pm"] {
+    --accent: #4f46e5;
+    --accent-soft: rgba(79, 70, 229, 0.1);
+    --edition-bg: rgba(79, 70, 229, 0.12);
+    --edition-color: #4338ca;
+  }
 
-    [data-edition="close"] {
-      --bg-glow-1: rgba(245, 158, 11, 0.13);
-      --bg-glow-2: rgba(244, 63, 94, 0.08);
-      --accent: #f59e0b;
-      --accent-soft: rgba(245, 158, 11, 0.14);
-      --edition-bg: rgba(245, 158, 11, 0.16);
-      --edition-color: #fcd34d;
-    }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    -webkit-text-size-adjust: 100%;
+    padding-bottom: 8px;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 0 14px; }
+  .pg {
+    position: fixed; top: 0; left: 0;
+    height: 2px; width: 0;
+    background: linear-gradient(90deg, var(--accent), #818cf8);
+    z-index: 99; transition: width 0.1s linear;
+  }
 
-    [data-edition="pm"] {
-      --bg-glow-1: rgba(139, 92, 246, 0.13);
-      --bg-glow-2: rgba(56, 189, 248, 0.09);
-      --accent: #818cf8;
-      --accent-soft: rgba(129, 140, 248, 0.14);
-      --edition-bg: rgba(139, 92, 246, 0.16);
-      --edition-color: #c4b5fd;
-    }
+  /* ---------- 顶栏 ---------- */
+  .hdr {
+    position: sticky; top: 0; z-index: 60;
+    background: color-mix(in srgb, var(--bg) 84%, transparent);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--border);
+  }
+  .hdrin { height: 46px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .hl { display: flex; align-items: center; gap: 7px; min-width: 0; }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex: 0 0 auto; }
+  .hdate { font-family: var(--mono); font-size: 12px; color: var(--text2); white-space: nowrap; }
+  .epill {
+    font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 999px;
+    background: var(--edition-bg); color: var(--edition-color); white-space: nowrap;
+  }
+  .hr { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
+  select.arch {
+    max-width: 104px; height: 26px;
+    background: var(--bg-card); color: var(--text2);
+    border: 1px solid var(--border); border-radius: 7px;
+    font-size: 11px; padding: 0 2px;
+  }
+  button.icon {
+    width: 26px; height: 26px; border-radius: 7px; cursor: pointer;
+    background: var(--bg-card); color: var(--text2);
+    border: 1px solid var(--border); font-size: 12px; line-height: 1;
+  }
 
-    [data-theme="light"] {
-      --bg: #f4f6f9;
-      --bg-glow-1: rgba(2, 132, 199, 0.07);
-      --bg-glow-2: rgba(99, 102, 241, 0.05);
-      --bg-elevated: #ffffff;
-      --bg-card: #ffffff;
-      --bg-card-hover: #ffffff;
-      --bg-subtle: #f8fafc;
-      --border: rgba(15, 23, 42, 0.08);
-      --border-strong: rgba(15, 23, 42, 0.18);
-      --text: #0f172a;
-      --text-secondary: #475569;
-      --text-muted: #64748b;
-      --accent: #0284c7;
-      --accent-soft: rgba(2, 132, 199, 0.1);
-      --edition-bg: rgba(2, 132, 199, 0.11);
-      --edition-color: #0369a1;
-      --green: #059669;
-      --green-bg: rgba(5, 150, 105, 0.1);
-      --red: #e11d48;
-      --red-bg: rgba(225, 29, 72, 0.1);
-      --amber: #d97706;
-      --amber-bg: rgba(217, 119, 6, 0.12);
-      --breaking-border: rgba(217, 119, 6, 0.48);
-      --breaking-glow: 0 10px 26px -12px rgba(217, 119, 6, 0.18);
-      --shadow: 0 6px 22px -10px rgba(15, 23, 42, 0.08);
-    }
+  /* ---------- 头版 ---------- */
+  .hero { padding: 14px 0 10px; }
+  .hero h1 {
+    font-size: 19px; font-weight: 800; line-height: 1.45; letter-spacing: -0.2px;
+    margin-bottom: 7px;
+  }
+  .hmeta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-family: var(--mono); font-size: 11px; color: var(--text3); }
+  .mood { font-family: -apple-system, sans-serif; font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 999px; }
+  .mood-bullish { background: rgba(244, 63, 94, 0.14); color: var(--up-red); }
+  .mood-bearish { background: rgba(16, 185, 129, 0.14); color: var(--up-green); }
+  .mood-neutral { background: var(--accent-soft); color: var(--accent); }
 
-    [data-theme="light"][data-edition="close"] {
-      --accent: #d97706;
-      --accent-soft: rgba(217, 119, 6, 0.11);
-      --edition-bg: rgba(217, 119, 6, 0.12);
-      --edition-color: #b45309;
-    }
+  /* ---------- 行情 2×2 ---------- */
+  .mkt { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 6px 0 10px; }
+  .gcard {
+    position: relative; overflow: hidden;
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 11px; padding: 8px 9px 9px;
+  }
+  .gcap {
+    display: flex; align-items: center; justify-content: space-between; gap: 4px;
+    font-size: 10.5px; font-weight: 700; color: var(--text3);
+    margin-bottom: 4px; letter-spacing: 0.2px;
+  }
+  .gcap > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .gtime { font-family: var(--mono); font-weight: 500; font-size: 9.5px; opacity: 0.75; flex: 0 0 auto; }
+  .mrow {
+    position: relative;
+    display: flex; align-items: center; justify-content: space-between; gap: 4px;
+    padding: 3.5px 0; border-bottom: 1px dashed var(--border);
+  }
+  .mrow:last-child { border-bottom: none; padding-bottom: 0; }
+  .mrow .sparkline {
+    position: absolute; right: -2px; bottom: 1px;
+    width: 44px; height: 15px; opacity: 0.3; pointer-events: none;
+  }
+  .mname {
+    display: flex; flex-direction: column; min-width: 0;
+    font-size: 12px; font-weight: 600; line-height: 1.25;
+  }
+  .mname em {
+    font-style: normal; font-family: var(--mono); font-size: 10px;
+    color: var(--text3); font-variant-numeric: tabular-nums;
+  }
+  .mpct {
+    position: relative; z-index: 1; flex: 0 0 auto;
+    font-family: var(--mono); font-size: 12px; font-weight: 800;
+    font-variant-numeric: tabular-nums;
+  }
+  .pos-green, .neg-green { color: var(--up-green); }
+  .pos-red, .neg-red { color: var(--up-red); }
+  .flat { color: var(--text2); }
 
-    [data-theme="light"][data-edition="pm"] {
-      --accent: #4f46e5;
-      --accent-soft: rgba(79, 70, 229, 0.1);
-      --edition-bg: rgba(79, 70, 229, 0.12);
-      --edition-color: #4338ca;
-    }
+  /* ---------- 必读 chips ---------- */
+  .chips { display: flex; gap: 6px; overflow-x: auto; padding: 2px 0 10px; scrollbar-width: none; }
+  .chips::-webkit-scrollbar { display: none; }
+  .chip {
+    flex: 0 0 auto; max-width: 82vw;
+    display: flex; align-items: center; gap: 6px;
+    padding: 6px 9px; border-radius: 9px;
+    background: var(--bg-card); border: 1px solid var(--border);
+    color: var(--text); text-decoration: none; font-size: 12px; line-height: 1.4;
+  }
+  .chip b { flex: 0 0 auto; font-family: var(--mono); font-size: 10px; color: var(--amber); }
+  .chip span { display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+  .chip i { font-style: normal; color: var(--text3); font-size: 13px; }
 
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    html { scroll-behavior: smooth; }
-    body {
-      font-family: var(--font-sans);
-      background-color: var(--bg);
-      background-image:
-        radial-gradient(900px 420px at 15% -6%, var(--bg-glow-1), transparent 60%),
-        radial-gradient(760px 380px at 88% 2%, var(--bg-glow-2), transparent 55%);
-      background-attachment: fixed;
-      color: var(--text);
-      line-height: 1.65;
-      -webkit-font-smoothing: antialiased;
-      padding-bottom: 80px;
-    }
+  /* ---------- 综述 ---------- */
+  details.ov {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-left: 3px solid var(--accent); border-radius: 10px;
+    padding: 9px 11px; margin-bottom: 12px;
+  }
+  details.ov > summary {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    cursor: pointer; list-style: none;
+    font-size: 11px; font-weight: 800; color: var(--accent); letter-spacing: 0.3px;
+  }
+  details.ov > summary::-webkit-details-marker { display: none; }
+  .ovh { font-weight: 500; color: var(--text3); font-size: 10px; }
+  .ovh::after { content: "展开"; }
+  .ov[open] .ovh::after { content: "收起"; }
+  .ovtext { font-size: 13px; line-height: 1.72; color: var(--text); margin-top: 7px; }
+  .ov:not([open]) .ovtext { display: none; }
 
-    .read-progress {
-      position: fixed;
-      top: 0;
-      left: 0;
-      height: 2.5px;
-      width: 0%;
-      background: linear-gradient(90deg, var(--accent), #818cf8, var(--amber));
-      z-index: 100;
-      transition: width 0.08s linear;
-    }
+  /* ---------- Tab ---------- */
+  .tabs {
+    position: sticky; top: 46px; z-index: 50;
+    display: flex; gap: 4px; padding: 6px 0;
+    background: color-mix(in srgb, var(--bg) 90%, transparent);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+  }
+  .tab {
+    flex: 1; display: flex; align-items: center; justify-content: center; gap: 4px;
+    padding: 6px 2px; border-radius: 8px; cursor: pointer;
+    background: transparent; border: 1px solid transparent;
+    color: var(--text2); font-size: 12.5px; font-weight: 700;
+    font-family: inherit;
+  }
+  .tab em { font-style: normal; font-family: var(--mono); font-size: 10px; opacity: 0.7; }
+  .tab.on { background: var(--accent-soft); color: var(--accent); border-color: color-mix(in srgb, var(--accent) 30%, transparent); }
 
-    .ticker-tape {
-      background: var(--bg-elevated);
-      border-bottom: 1px solid var(--border);
-      overflow: hidden;
-      white-space: nowrap;
-      height: 34px;
-      display: flex;
-      align-items: center;
-      font-family: var(--font-mono);
-      font-size: 12px;
-    }
-    .ticker-track {
-      display: inline-flex;
-      align-items: center;
-      animation: marquee 42s linear infinite;
-    }
-    .ticker-tape:hover .ticker-track { animation-play-state: paused; }
-    @keyframes marquee {
-      0% { transform: translateX(0); }
-      100% { transform: translateX(-50%); }
-    }
-    .tape-item {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 0 18px;
-      border-right: 1px solid var(--border);
-    }
-    .tape-name { color: var(--text-secondary); font-family: var(--font-sans); font-weight: 600; }
-    .tape-price { color: var(--text); font-weight: 600; }
-    .tape-green { color: var(--green); font-weight: 700; }
-    .tape-red { color: var(--red); font-weight: 700; }
-    .tape-flat { color: var(--text-muted); }
+  /* ---------- 面板 / 新闻条目 ---------- */
+  .panel { display: none; padding-top: 4px; }
+  .panel.on { display: block; }
+  .phead { font-size: 11px; font-weight: 700; color: var(--text3); padding: 8px 2px 4px; }
+  .nitem { border-bottom: 1px solid var(--border); }
+  .nitem > summary {
+    display: grid; grid-template-columns: 20px 1fr auto; gap: 6px; align-items: start;
+    padding: 10px 2px; cursor: pointer; list-style: none;
+  }
+  .nitem > summary::-webkit-details-marker { display: none; }
+  .nidx { font-family: var(--mono); font-size: 10px; color: var(--text3); padding-top: 3px; }
+  .ntitle { font-size: 14px; font-weight: 600; line-height: 1.5; }
+  .nitem[open] .ntitle { color: var(--accent); }
+  .nside { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; padding-top: 3px; }
+  .nstars { font-size: 8.5px; letter-spacing: -0.5px; color: var(--amber); }
+  .nsent { font-size: 10px; font-weight: 800; }
+  .bull { color: var(--up-red); }
+  .bear { color: var(--up-green); }
+  .neu { color: var(--text3); }
+  .nbody { padding: 0 2px 12px 26px; }
+  .ntag { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 6px; }
+  .ntag span {
+    font-size: 10px; padding: 1px 7px; border-radius: 5px;
+    background: var(--bg-subtle); color: var(--text2);
+  }
+  .nfact { font-size: 13px; line-height: 1.72; color: var(--text2); margin-bottom: 7px; }
+  .nimpact {
+    font-size: 12.5px; line-height: 1.65; color: var(--text);
+    background: var(--bg-subtle); border-left: 2px solid var(--accent);
+    padding: 6px 9px; border-radius: 0 7px 7px 0; margin-bottom: 8px;
+  }
+  .nimpact b { color: var(--accent); font-size: 10px; font-weight: 800; margin-right: 5px; }
+  .nfoot { display: flex; justify-content: flex-end; font-size: 11px; }
+  .nfoot a { color: var(--accent); font-weight: 700; text-decoration: none; }
+  .nfoot .nolink { color: var(--text3); }
+  .empty { padding: 22px 8px; text-align: center; font-size: 12.5px; color: var(--text3); }
 
-    .container { max-width: 1040px; margin: 0 auto; padding: 0 22px; }
+  footer {
+    margin-top: 18px; padding: 14px 0 6px;
+    border-top: 1px solid var(--border);
+    text-align: center; font-size: 10.5px; line-height: 1.85; color: var(--text3);
+  }
 
-    .topbar {
-      position: sticky;
-      top: 0;
-      z-index: 60;
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
-      background: color-mix(in srgb, var(--bg) 80%, transparent);
-      border-bottom: 1px solid var(--border);
-    }
-    .topbar-inner {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      height: 58px;
-      gap: 12px;
-    }
-    .brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--text); }
-    .brand-mark {
-      width: 26px;
-      height: 26px;
-      border-radius: 7px;
-      background: linear-gradient(135deg, var(--accent), #6366f1);
-      display: grid;
-      place-items: center;
-      font-family: var(--font-mono);
-      font-weight: 800;
-      font-size: 13px;
-      color: #fff;
-      box-shadow: 0 4px 12px rgba(56, 189, 248, 0.28);
-    }
-    .brand-title { font-weight: 800; font-size: 15px; letter-spacing: 0.6px; }
-    .brand-sub { font-size: 12px; color: var(--text-muted); padding-left: 8px; border-left: 1px solid var(--border); }
-    .controls { display: flex; align-items: center; gap: 8px; }
-    .archive-select, .theme-btn {
-      background: var(--bg-elevated);
-      color: var(--text);
-      border: 1px solid var(--border);
-      border-radius: 9px;
-      padding: 6px 11px;
-      font-size: 12.5px;
-      font-weight: 500;
-      cursor: pointer;
-      transition: all 0.18s;
-    }
-    .archive-select:hover, .theme-btn:hover { border-color: var(--border-strong); background: var(--bg-card-hover); }
-
-    .hero { padding: 34px 0 24px; border-bottom: 1px solid var(--border); margin-bottom: 24px; }
-    .hero-top {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      justify-content: space-between;
-      gap: 10px;
-      margin-bottom: 14px;
-    }
-    .hero-meta-left { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
-    .edition-pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-      padding: 3px 10px;
-      border-radius: 999px;
-      font-size: 12px;
-      font-weight: 700;
-      background: var(--edition-bg);
-      color: var(--edition-color);
-    }
-    .hero-date {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 13px;
-      color: var(--text-secondary);
-      font-family: var(--font-mono);
-    }
-    .live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.18); }
-    .mood-pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 4px 12px;
-      border-radius: 999px;
-      font-size: 12px;
-      font-weight: 700;
-    }
-    .mood-bullish { background: var(--red-bg); color: var(--red); border: 1px solid rgba(244, 63, 94, 0.25); }
-    .mood-bearish { background: var(--green-bg); color: var(--green); border: 1px solid rgba(16, 185, 129, 0.25); }
-    .mood-neutral { background: var(--accent-soft); color: var(--accent); border: 1px solid rgba(56, 189, 248, 0.25); }
-
-    .hero h1 {
-      font-family: var(--font-serif);
-      font-size: clamp(25px, 4.2vw, 36px);
-      font-weight: 800;
-      letter-spacing: -0.3px;
-      line-height: 1.32;
-      margin-bottom: 18px;
-    }
-
-    .quick-nav { display: flex; flex-wrap: wrap; gap: 8px; }
-    .quick-nav a {
-      text-decoration: none;
-      font-size: 13px;
-      font-weight: 500;
-      color: var(--text-secondary);
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      padding: 6px 14px;
-      border-radius: 999px;
-      transition: all 0.18s;
-    }
-    .quick-nav a:hover { color: var(--accent); border-color: var(--accent); transform: translateY(-1px); }
-
-    .market-grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 16px;
-      margin-bottom: 24px;
-      scroll-margin-top: 76px;
-    }
-    .market-card {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 16px 20px;
-      box-shadow: var(--shadow);
-      backdrop-filter: blur(8px);
-    }
-    .market-card-title {
-      font-size: 13px;
-      font-weight: 700;
-      color: var(--text-secondary);
-      margin-bottom: 12px;
-      padding-bottom: 8px;
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-    .market-card-sub { font-size: 11px; font-weight: 500; color: var(--text-muted); background: var(--bg-subtle); padding: 2px 7px; border-radius: 5px; }
-    .market-row {
-      display: grid;
-      grid-template-columns: 1fr auto auto;
-      align-items: center;
-      gap: 12px;
-      padding: 8px 0;
-      border-bottom: 1px dashed var(--border);
-    }
-    .market-row:last-child { border-bottom: none; padding-bottom: 0; }
-    .ticker-left { display: flex; flex-direction: column; min-width: 0; }
-    .ticker-name { font-size: 14px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .ticker-sym { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-muted); }
-    .ticker-mid { display: flex; align-items: center; justify-content: center; }
-    .sparkline { display: block; overflow: visible; }
-    .ticker-right { display: flex; align-items: center; justify-content: flex-end; gap: 9px; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
-    .ticker-price { font-size: 14px; font-weight: 700; color: var(--text); }
-    .pct-badge { min-width: 72px; text-align: right; font-size: 12px; font-weight: 700; padding: 3px 8px; border-radius: 7px; }
-    .pct-green { color: var(--green); background: var(--green-bg); }
-    .pct-red { color: var(--red); background: var(--red-bg); }
-    .pct-flat { color: var(--text-secondary); background: var(--bg-subtle); }
-
-    .overview-box {
-      background: linear-gradient(145deg, var(--bg-card) 0%, var(--bg-elevated) 100%);
-      border: 1px solid var(--border);
-      border-radius: 18px;
-      padding: 22px 24px;
-      margin-bottom: 26px;
-      box-shadow: var(--shadow);
-      position: relative;
-      overflow: hidden;
-    }
-    .overview-box::before {
-      content: "";
-      position: absolute;
-      left: 0;
-      top: 0;
-      bottom: 0;
-      width: 4px;
-      background: linear-gradient(180deg, var(--accent), #818cf8);
-    }
-    .overview-label { font-size: 13px; font-weight: 800; color: var(--accent); letter-spacing: 0.6px; margin-bottom: 10px; }
-    .overview-text { font-size: 15.5px; color: var(--text); line-height: 1.85; }
-
-    .spotlight-wrap { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border); }
-    .spotlight-header { font-size: 12px; font-weight: 700; color: var(--amber); letter-spacing: 0.4px; margin-bottom: 10px; }
-    .spotlight-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-    .spotlight-item {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 8px 11px;
-      background: var(--bg-subtle);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      text-decoration: none;
-      color: var(--text);
-      font-size: 13px;
-      transition: all 0.16s;
-      min-width: 0;
-    }
-    .spotlight-item:hover { border-color: var(--amber); background: var(--amber-bg); transform: translateX(2px); }
-    .spotlight-badge { font-family: var(--font-mono); font-size: 11px; font-weight: 700; color: var(--amber); white-space: nowrap; }
-    .spotlight-sec { font-size: 11px; color: var(--text-muted); white-space: nowrap; }
-    .spotlight-title { flex: 1; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .spotlight-arrow { color: var(--text-muted); font-size: 12px; }
-
-    .filter-bar {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      margin-bottom: 24px;
-      padding: 12px 14px;
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      box-shadow: var(--shadow);
-    }
-    .filter-pills { display: flex; flex-wrap: wrap; gap: 6px; }
-    .filter-btn {
-      background: var(--bg-subtle);
-      color: var(--text-secondary);
-      border: 1px solid var(--border);
-      border-radius: 999px;
-      padding: 5px 13px;
-      font-size: 12.5px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.16s;
-    }
-    .filter-btn:hover { color: var(--text); border-color: var(--border-strong); }
-    .filter-btn.active { background: var(--accent); color: #ffffff; border-color: var(--accent); }
-    .search-box { position: relative; flex: 0 1 240px; min-width: 180px; }
-    .search-input {
-      width: 100%;
-      background: var(--bg-elevated);
-      color: var(--text);
-      border: 1px solid var(--border);
-      border-radius: 999px;
-      padding: 6px 14px 6px 32px;
-      font-size: 12.5px;
-      outline: none;
-    }
-    .search-input:focus { border-color: var(--accent); }
-    .search-icon { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); font-size: 12px; color: var(--text-muted); pointer-events: none; }
-
-    .section { margin-bottom: 38px; scroll-margin-top: 76px; }
-    .section-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 16px;
-      padding-bottom: 10px;
-      border-bottom: 1px solid var(--border);
-    }
-    .section-title { font-family: var(--font-serif); font-size: 20px; font-weight: 800; display: flex; align-items: center; gap: 9px; }
-    .section-count { font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); background: var(--bg-elevated); border: 1px solid var(--border); padding: 3px 10px; border-radius: 999px; }
-
-    .news-list { display: grid; gap: 15px; }
-    .news-card {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 20px 22px;
-      transition: transform 0.2s ease, border-color 0.2s ease;
-      box-shadow: var(--shadow);
-      scroll-margin-top: 84px;
-    }
-    .news-card:hover { transform: translateY(-2px); border-color: var(--border-strong); background: var(--bg-card-hover); }
-    .news-card.is-breaking {
-      border-color: var(--breaking-border);
-      box-shadow: var(--breaking-glow);
-      background: linear-gradient(180deg, color-mix(in srgb, var(--amber) 5%, var(--bg-card)) 0%, var(--bg-card) 45%);
-    }
-    .news-card.is-hidden { display: none; }
-
-    .news-top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 10px; }
-    .news-idx { font-family: var(--font-mono); font-size: 12px; font-weight: 700; color: var(--text-muted); }
-    .breaking-pill { font-size: 11.5px; font-weight: 800; padding: 2px 9px; border-radius: 6px; background: var(--amber-bg); color: var(--amber); border: 1px solid rgba(245, 158, 11, 0.32); }
-    .score-pill { font-size: 11.5px; letter-spacing: 1px; padding: 2px 7px; border-radius: 6px; background: var(--bg-subtle); border: 1px solid var(--border); }
-    .stars-on { color: var(--amber); }
-    .stars-off { color: var(--text-muted); opacity: 0.45; }
-    .tag-pill { font-size: 11.5px; font-weight: 600; padding: 2px 9px; border-radius: 6px; background: var(--accent-soft); color: var(--accent); }
-    .sent-pill { font-size: 11.5px; font-weight: 700; padding: 2px 9px; border-radius: 6px; }
-    .sent-bull { background: var(--red-bg); color: var(--red); }
-    .sent-bear { background: var(--green-bg); color: var(--green); }
-    .sent-neu { background: var(--bg-subtle); color: var(--text-secondary); }
-
-    .news-title { font-size: 17.5px; font-weight: 700; line-height: 1.45; margin-bottom: 9px; color: var(--text); }
-    .news-fact { font-size: 14.8px; color: var(--text-secondary); line-height: 1.8; margin-bottom: 12px; }
-    .news-impact {
-      display: flex;
-      align-items: baseline;
-      gap: 8px;
-      background: var(--bg-subtle);
-      border-left: 3px solid var(--accent);
-      border-radius: 0 10px 10px 0;
-      padding: 9px 13px;
-      font-size: 13.5px;
-      color: var(--text);
-      margin-bottom: 13px;
-      line-height: 1.65;
-    }
-    .impact-label { font-size: 11.5px; font-weight: 800; color: var(--accent); background: var(--accent-soft); padding: 1px 7px; border-radius: 5px; white-space: nowrap; }
-    .news-footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 12.5px; color: var(--text-muted); padding-top: 10px; border-top: 1px solid var(--border); }
-    .source-meta { font-family: var(--font-mono); font-size: 12px; }
-    .source-link { color: var(--accent); text-decoration: none; font-weight: 600; padding: 3px 10px; border-radius: 999px; background: var(--accent-soft); transition: all 0.16s; }
-    .source-link:hover { background: var(--accent); color: #fff; }
-    .source-nolink { font-size: 11.5px; opacity: 0.65; }
-
-    .empty-hint { display: none; text-align: center; padding: 28px 16px; color: var(--text-muted); font-size: 13.5px; border: 1px dashed var(--border); border-radius: 14px; }
-    .empty-hint.show { display: block; }
-
-    .back-top {
-      position: fixed;
-      right: 22px;
-      bottom: 24px;
-      width: 40px;
-      height: 40px;
-      border-radius: 50%;
-      border: 1px solid var(--border-strong);
-      background: var(--bg-elevated);
-      color: var(--text);
-      font-size: 16px;
-      cursor: pointer;
-      box-shadow: var(--shadow);
-      opacity: 0;
-      pointer-events: none;
-      transition: all 0.2s;
-      z-index: 70;
-    }
-    .back-top.visible { opacity: 1; pointer-events: auto; }
-    .back-top:hover { border-color: var(--accent); color: var(--accent); transform: translateY(-2px); }
-
-    footer { text-align: center; font-size: 12.5px; color: var(--text-muted); padding-top: 28px; border-top: 1px solid var(--border); line-height: 1.9; }
-
-    @media (max-width: 760px) {
-      .market-grid { grid-template-columns: 1fr; }
-      .spotlight-list { grid-template-columns: 1fr; }
-      .hero { padding: 24px 0 18px; }
-      .news-card { padding: 16px; }
-      .overview-box { padding: 18px; }
-      .brand-sub { display: none; }
-      .search-box { flex: 1 1 100%; }
-      .ticker-mid { display: none; }
-    }
-  </style>
+  @media (min-width: 700px) {
+    .hero h1 { font-size: 24px; }
+    .mkt { grid-template-columns: 1fr 1fr; gap: 10px; }
+    .ntitle { font-size: 15px; }
+  }
+</style>
 </head>
 <body>
-  <div class="read-progress" id="readProgress"></div>
-  __TICKER_TAPE__
+<div class="pg" id="pg"></div>
 
-  <header class="topbar">
-    <div class="container topbar-inner">
-      <a class="brand" href="__HOME_LINK__">
-        <span class="brand-mark">DB</span>
-        <span class="brand-title">DAILY BRIEF</span>
-        <span class="brand-sub">早 · 收盘 · 晚 三推终端</span>
-      </a>
-      <div class="controls">
-        __ARCHIVE_SELECT__
-        <button class="theme-btn" id="themeToggle" type="button" aria-label="切换主题">☀️ 浅色</button>
-      </div>
+<header class="hdr">
+  <div class="wrap hdrin">
+    <div class="hl">
+      <span class="dot"></span>
+      <span class="hdate">__DATE_SHORT__</span>
+      <span class="epill">__EDITION_BADGE_SHORT__</span>
     </div>
-  </header>
-
-  <main class="container">
-    <section class="hero">
-      <div class="hero-top">
-        <div class="hero-meta-left">
-          <span class="edition-pill">__EDITION_BADGE__</span>
-          <span class="hero-date">
-            <span class="live-dot"></span>
-            <span>__DATE_FULL__ __WEEKDAY__ · __GEN_TIME__ CST</span>
-          </span>
-        </div>
-        <span class="mood-pill __MOOD_CLASS__">__MOOD_LABEL__</span>
-      </div>
-      <h1>__MOOD_HEADLINE__</h1>
-      <nav class="quick-nav">
-        __QUICK_NAV__
-      </nav>
-    </section>
-
-    <section id="markets" class="market-grid">
-      __MARKET_CARDS__
-    </section>
-
-    <section class="overview-box">
-      <div class="overview-label">🧭 __OVERVIEW_TITLE__</div>
-      <div class="overview-text">__OVERVIEW__</div>
-      __TOP_PICKS_HTML__
-    </section>
-
-    <div class="filter-bar">
-      <div class="filter-pills" role="group" aria-label="新闻筛选">
-        <button class="filter-btn active" type="button" data-filter="all">全部资讯</button>
-        <button class="filter-btn" type="button" data-filter="top">🔥 重磅 4-5★</button>
-        <button class="filter-btn" type="button" data-filter="bull">▲ 仅看利好</button>
-        <button class="filter-btn" type="button" data-filter="bear">▼ 仅看利空</button>
-      </div>
-      <div class="search-box">
-        <span class="search-icon">🔍</span>
-        <input class="search-input" id="searchInput" type="search" placeholder="搜索公司、板块或关键词..." />
-      </div>
+    <div class="hr">
+      __ARCHIVE_SELECT__
+      <button class="icon" id="tg" type="button" aria-label="切换深浅主题">☀️</button>
     </div>
+  </div>
+</header>
 
-    __NEWS_SECTIONS__
+<main class="wrap">
+  <section class="hero">
+    <h1>__MOOD_HEADLINE__</h1>
+    <div class="hmeta">
+      <span class="mood __MOOD_CLASS__">__MOOD_LABEL__</span>
+      <span>__WEEKDAY__ __GEN_TIME__ CST</span>
+    </div>
+  </section>
 
-    <footer>
-      <div>权威信源：Bloomberg · Financial Times · Reuters · WSJ · CNBC · 财联社 · BBC（按重磅程度排序）</div>
-      <div>精准行情：Yahoo Finance &amp; 东方财富（代码直出，零模型幻觉） · 每日 08:30 / 15:30 / 22:00 自动推送</div>
-    </footer>
-  </main>
+  <section class="mkt">__MARKET_TILES__</section>
+  __MUST_READ__
 
-  <button class="back-top" id="backTop" type="button" aria-label="返回顶部">↑</button>
+  <details class="ov" open>
+    <summary><span>🧭 __OVERVIEW_TITLE__</span><span class="ovh"></span></summary>
+    <div class="ovtext">__OVERVIEW__</div>
+  </details>
 
-  <script>
-    (function () {
-      const root = document.documentElement;
-      const themeBtn = document.getElementById("themeToggle");
-      const saved = localStorage.getItem("brief-theme") || "dark";
-      function applyTheme(t) {
-        root.setAttribute("data-theme", t);
-        themeBtn.textContent = t === "dark" ? "☀️ 浅色" : "🌙 深色";
-      }
-      applyTheme(saved);
-      themeBtn.addEventListener("click", function () {
-        const next = root.getAttribute("data-theme") === "dark" ? "light" : "dark";
-        localStorage.setItem("brief-theme", next);
-        applyTheme(next);
-      });
+  <div class="tabs" role="tablist">__TABS__</div>
+  __PANELS__
 
-      const progressEl = document.getElementById("readProgress");
-      const backTopBtn = document.getElementById("backTop");
-      window.addEventListener("scroll", function () {
-        const scrollTop = window.scrollY || document.documentElement.scrollTop;
-        const docHeight = document.documentElement.scrollHeight - window.innerHeight;
-        const pct = docHeight > 0 ? Math.min(100, (scrollTop / docHeight) * 100) : 0;
-        progressEl.style.width = pct + "%";
-        backTopBtn.classList.toggle("visible", scrollTop > 420);
-      }, { passive: true });
-      backTopBtn.addEventListener("click", function () {
-        window.scrollTo({ top: 0, behavior: "smooth" });
-      });
+  <footer>
+    <div>Bloomberg · FT · Reuters · WSJ · CNBC · 财联社 · BBC</div>
+    <div>行情 __DATA_NOTE__ · 早 08:30 / 收 15:30 / 晚 22:00</div>
+  </footer>
+</main>
 
-      let activeFilter = "all";
-      const filterBtns = document.querySelectorAll(".filter-btn");
-      const searchInput = document.getElementById("searchInput");
-      const sections = document.querySelectorAll("section[data-section]");
+<script>
+  (function () {
+    var root = document.documentElement;
+    var tg = document.getElementById("tg");
+    function apply(t) {
+      root.setAttribute("data-theme", t);
+      tg.textContent = t === "dark" ? "☀️" : "🌙";
+    }
+    apply(localStorage.getItem("brief-theme") || "dark");
+    tg.addEventListener("click", function () {
+      var next = root.getAttribute("data-theme") === "dark" ? "light" : "dark";
+      localStorage.setItem("brief-theme", next);
+      apply(next);
+    });
 
-      function applyFilters() {
-        const kw = (searchInput.value || "").trim().toLowerCase();
-        sections.forEach(function (sec) {
-          const secKey = sec.getAttribute("data-section");
-          const cards = sec.querySelectorAll(".news-card");
-          let visibleCount = 0;
+    var pg = document.getElementById("pg");
+    window.addEventListener("scroll", function () {
+      var top = window.scrollY || document.documentElement.scrollTop;
+      var h = document.documentElement.scrollHeight - window.innerHeight;
+      pg.style.width = (h > 0 ? Math.min(100, (top / h) * 100) : 0) + "%";
+    }, { passive: true });
 
-          cards.forEach(function (card) {
-            const score = parseInt(card.getAttribute("data-score") || "3", 10);
-            const sent = card.getAttribute("data-sentiment") || "neutral";
-            const text = (card.textContent || "").toLowerCase();
+    var tabs = [].slice.call(document.querySelectorAll(".tab"));
+    var panels = [].slice.call(document.querySelectorAll(".panel"));
+    function pick(key) {
+      tabs.forEach(function (t) { t.classList.toggle("on", t.dataset.tab === key); });
+      panels.forEach(function (p) { p.classList.toggle("on", p.dataset.panel === key); });
+    }
+    tabs.forEach(function (t) {
+      t.addEventListener("click", function () { pick(t.dataset.tab); });
+    });
 
-            let matchFilter = true;
-            if (activeFilter === "top") matchFilter = score >= 4;
-            else if (activeFilter === "bull") matchFilter = sent === "bull";
-            else if (activeFilter === "bear") matchFilter = sent === "bear";
-
-            const matchSearch = !kw || text.includes(kw);
-            const show = matchFilter && matchSearch;
-            card.classList.toggle("is-hidden", !show);
-            if (show) visibleCount++;
-          });
-
-          const countEl = document.querySelector('[data-count-for="' + secKey + '"]');
-          const emptyEl = document.querySelector('[data-empty-for="' + secKey + '"]');
-          if (countEl) countEl.textContent = visibleCount + " 条显示";
-          if (emptyEl) emptyEl.classList.toggle("show", visibleCount === 0);
-        });
-      }
-
-      filterBtns.forEach(function (btn) {
-        btn.addEventListener("click", function () {
-          filterBtns.forEach(function (b) { b.classList.remove("active"); });
-          btn.classList.add("active");
-          activeFilter = btn.getAttribute("data-filter") || "all";
-          applyFilters();
-        });
-      });
-      searchInput.addEventListener("input", applyFilters);
-    })();
-  </script>
+    // 必读 chip / 外部锚点：自动切到对应 Tab 并展开该条
+    function jumpToHash() {
+      var hash = window.location.hash;
+      if (!hash || hash.length < 2) return;
+      var el;
+      try { el = document.querySelector(hash); } catch (e) { return; }
+      if (!el) return;
+      var panel = el.closest(".panel");
+      if (panel) pick(panel.dataset.panel);
+      if (el.tagName === "DETAILS") el.setAttribute("open", "");
+      el.scrollIntoView({ block: "center" });
+    }
+    window.addEventListener("hashchange", jumpToHash);
+    jumpToHash();
+  })();
+</script>
 </body>
 </html>
 """
@@ -1401,76 +1182,68 @@ def render_page_html(now, edition, us_idx, tech_stocks, a_idx, macro_assets, llm
     }
     mood_cls, mood_label = mood_map.get(mood, ("mood-neutral", f"📊 每日{meta['name']}"))
 
-    if edition == "close":
-        tape_groups = [(a_idx, False), (macro_assets, True), (us_idx, True), (tech_stocks, True)]
-        market_cards = "\n".join([
-            render_market_card_html(meta["a_card_title"], "红涨绿跌 · 7日趋势", a_idx, is_us=False, card_prefix="cn"),
-            render_market_card_html("🌍 大宗 · 加密 · 汇率", "绿涨红跌 · 7日趋势", macro_assets, is_us=True, card_prefix="mc"),
-            render_market_card_html(meta["us_card_title"], "绿涨红跌 · 7日趋势", us_idx, is_us=True, card_prefix="us"),
-            render_market_card_html("🚀 美股科技风向", "绿涨红跌 · 7日趋势", tech_stocks, is_us=True, card_prefix="tk"),
-        ])
-        quick_nav = (
-            '<a href="#markets">📊 跨市场行情</a>'
-            '<a href="#cn-a">🇨🇳 A股收盘复盘</a>'
-            '<a href="#us-global">🇺🇸 亚欧与美股动态</a>'
-            '<a href="#general">🌐 国际时政与科技</a>'
-        )
-        overview_title = "A 股收盘全景复盘"
-    elif edition == "pm":
-        tape_groups = [(us_idx, True), (tech_stocks, True), (macro_assets, True), (a_idx, False)]
-        market_cards = "\n".join([
-            render_market_card_html(meta["us_card_title"], "绿涨红跌 · 7日趋势", us_idx, is_us=True, card_prefix="us"),
-            render_market_card_html("🚀 美股科技风向", "绿涨红跌 · 7日趋势", tech_stocks, is_us=True, card_prefix="tk"),
-            render_market_card_html("🌍 大宗 · 加密 · 汇率", "绿涨红跌 · 7日趋势", macro_assets, is_us=True, card_prefix="mc"),
-            render_market_card_html(meta["a_card_title"], "红涨绿跌 · 7日趋势", a_idx, is_us=False, card_prefix="cn"),
-        ])
-        quick_nav = (
-            '<a href="#markets">📊 跨市场行情</a>'
-            '<a href="#us-global">🇺🇸 美股盘前与宏观</a>'
-            '<a href="#cn-a">🇨🇳 国内盘后新增</a>'
-            '<a href="#general">🌐 国际时政与科技</a>'
-        )
-        overview_title = "晚间美股前瞻与跨市场总览"
-    else:
-        tape_groups = [(us_idx, True), (tech_stocks, True), (a_idx, False), (macro_assets, True)]
-        market_cards = "\n".join([
-            render_market_card_html(meta["us_card_title"], "绿涨红跌 · 7日趋势", us_idx, is_us=True, card_prefix="us"),
-            render_market_card_html("🚀 美股科技风向", "绿涨红跌 · 7日趋势", tech_stocks, is_us=True, card_prefix="tk"),
-            render_market_card_html(meta["a_card_title"], "红涨绿跌 · 7日趋势", a_idx, is_us=False, card_prefix="cn"),
-            render_market_card_html("🌍 大宗 · 加密 · 汇率", "绿涨红跌 · 7日趋势", macro_assets, is_us=True, card_prefix="mc"),
-        ])
-        quick_nav = (
-            '<a href="#markets">📊 跨市场行情</a>'
-            '<a href="#us-global">🇺🇸 隔夜美股与全球</a>'
-            '<a href="#cn-a">🇨🇳 A股盘前与宏观</a>'
-            '<a href="#general">🌐 国际时政与科技</a>'
-        )
-        overview_title = "今日早报主编全景总览"
-
     us_news = llm_data.get("us_global_news", [])
     cn_news = llm_data.get("cn_a_news", [])
     gen_news = llm_data.get("general_news", [])
 
+    if edition == "close":
+        groups = [
+            (meta["a_card_title"], a_idx, False),
+            ("🌍 大宗 · 加密 · 汇率", macro_assets, True),
+            (meta["us_card_title"], us_idx, True),
+            ("🚀 美股科技", tech_stocks, True),
+        ]
+        overview_title = "A 股收盘全景复盘"
+    elif edition == "pm":
+        groups = [
+            (meta["us_card_title"], us_idx, True),
+            ("🚀 美股科技", tech_stocks, True),
+            ("🌍 大宗 · 加密 · 汇率", macro_assets, True),
+            (meta["a_card_title"], a_idx, False),
+        ]
+        overview_title = "晚间美股前瞻与跨市场总览"
+    else:
+        groups = [
+            (meta["us_card_title"], us_idx, True),
+            ("🚀 美股科技", tech_stocks, True),
+            (meta["a_card_title"], a_idx, False),
+            ("🌍 大宗 · 加密 · 汇率", macro_assets, True),
+        ]
+        overview_title = "今日早报主编全景总览"
+
+    market_tiles = "".join(
+        render_market_group_html(title, data, is_us=is_us) for title, data, is_us in groups
+    )
+    tabs_html, panels_html = render_news_sections_html(us_news, cn_news, gen_news, edition)
+
+    # 把实际使用的行情源写进页脚，便于核对数据来源
+    sources = sorted({
+        item.get("source", "")
+        for group in (us_idx, tech_stocks, a_idx, macro_assets)
+        for item in group
+        if item.get("source")
+    })
+    data_note = " / ".join(sources) if sources else "多源交叉校验"
+
     replacements = {
         "__EDITION_CODE__": edition,
         "__FULL_NAME__": esc(meta["full_name"]),
-        "__EDITION_BADGE__": esc(meta["badge_text"]),
+        "__EDITION_BADGE_SHORT__": esc(f"{meta['icon']}{meta['name']}"),
         "__DATE_STR__": esc(date_str),
-        "__DATE_FULL__": esc(date_full),
+        "__DATE_SHORT__": esc(now.strftime("%m-%d")) + " " + esc(weekday),
         "__WEEKDAY__": esc(weekday),
         "__GEN_TIME__": esc(now.strftime("%H:%M")),
         "__MOOD_CLASS__": mood_cls,
         "__MOOD_LABEL__": esc(mood_label),
         "__MOOD_HEADLINE__": esc(llm_data.get("mood_headline") or f"{date_full} {meta['full_name']}"),
-        "__HOME_LINK__": "../index.html" if is_archive else "index.html",
         "__ARCHIVE_SELECT__": build_archive_select_html(archive_ids, edition_id, is_archive=is_archive),
-        "__TICKER_TAPE__": render_ticker_tape_html(tape_groups),
-        "__QUICK_NAV__": quick_nav,
-        "__MARKET_CARDS__": market_cards,
+        "__MARKET_TILES__": market_tiles,
+        "__MUST_READ__": render_must_read_html(llm_data, edition),
         "__OVERVIEW_TITLE__": esc(overview_title),
         "__OVERVIEW__": esc(llm_data.get("overview", "")),
-        "__TOP_PICKS_HTML__": render_top_picks_html(llm_data, edition),
-        "__NEWS_SECTIONS__": render_news_sections_html(us_news, cn_news, gen_news, edition),
+        "__TABS__": tabs_html,
+        "__PANELS__": panels_html,
+        "__DATA_NOTE__": esc(data_note),
     }
     page = HTML_TEMPLATE
     for k, v in replacements.items():
